@@ -15,8 +15,6 @@ class Vpn(
 
     private val platformService: PlatformService<out VpnAddress>
     private var adapter: VpnAdapter? = null
-    var lastAlert: Pair<ErrorCode, String>? = null
-        private set
 
     init {
         require(nativeInterfaceName.isNotEmpty()) { "Interface name cannot be empty" }
@@ -43,22 +41,22 @@ class Vpn(
             throw IllegalStateException("`$shortName` already exists and is up")
         }
 
-        val req = StartRequest.Builder(vpnConfiguration)
-            .withNativeInterfaceName(nativeInterfaceName)
-            .withPeer(peer)
-            .build()
+        val req = StartRequest(
+            configuration = vpnConfiguration,
+            interfaceName = nativeInterfaceName,
+            peer = peer
+        )
 
         adapter = platformService.start(req)
     }
 
     @Throws(Exception::class)
-    fun information(): VpnInterfaceInformation {
-        return adapter?.information() ?: VpnInterfaceInformation.EMPTY
+    fun information(): VpnInterfaceInformation? {
+        return adapter?.information()
     }
 
     private fun alertUser(errorCode: ErrorCode, message: String) {
         val alert = Pair(errorCode, message)
-        lastAlert = alert
         onAlert?.invoke(alert)
     }
 
