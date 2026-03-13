@@ -6,7 +6,7 @@ import com.rafambn.kmpvpn.VpnPeer
 import com.rafambn.kmpvpn.address.VpnAddress
 import com.rafambn.kmpvpn.dns.DNSProvider
 
-abstract class AbstractPlatformService<I : VpnAddress>(private val interfacePrefix: String) : BasePlatformService<I>() {
+abstract class AbstractPlatformService<I : VpnAddress> : BasePlatformService<I>() {
     private var defaultGatewayPeer: VpnPeer? = null
 
     init {

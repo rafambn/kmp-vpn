@@ -29,7 +29,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.toJavaInstant
 
 @OptIn(ExperimentalTime::class)
-abstract class AbstractDesktopPlatformService<I : VpnAddress>(interfacePrefix: String) : AbstractPlatformService<I>(interfacePrefix) {
+abstract class AbstractDesktopPlatformService<I : VpnAddress> : AbstractPlatformService<I>() {
     private var dnsProvider: DNSProvider? = null
 
     protected fun findAddress(startRequest: StartRequest): I {

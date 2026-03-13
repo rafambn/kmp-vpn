@@ -7,7 +7,7 @@ import com.rafambn.kmpvpn.platform.createPlatformService
 
 class Vpn(
     val nativeInterfaceName: String,
-    engine: Engine = Engine.WG_GO,
+    engine: Engine = Engine.BORINGTUN,
     val vpnConfiguration: VpnConfiguration,
     val peer: VpnPeer? = null,
     val onAlert: ((Pair<ErrorCode, String>) -> Unit)? = null

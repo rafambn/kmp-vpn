@@ -5,7 +5,7 @@ import com.rafambn.kmpvpn.Engine
 /**
  * Create a WireGuard Go platform service
  */
-expect fun createWireGuardGoPlatformService(): PlatformService<*>
+expect fun createQuicPlatformService(): PlatformService<*>
 
 /**
  * Create a BoringTun platform service
@@ -17,7 +17,7 @@ expect fun createBoringTunPlatformService(): PlatformService<*>
  */
 fun createPlatformService(engine: Engine): PlatformService<*> {
     return when (engine) {
-        Engine.WG_GO -> createWireGuardGoPlatformService()
+        Engine.QUIC -> createQuicPlatformService()
         Engine.BORINGTUN -> createBoringTunPlatformService()
     }
 }

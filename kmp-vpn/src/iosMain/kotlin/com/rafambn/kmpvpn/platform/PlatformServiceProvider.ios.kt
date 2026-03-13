@@ -3,7 +3,7 @@ package com.rafambn.kmpvpn.platform
 /**
  * iOS implementation of WireGuard Go platform service
  */
-actual fun createWireGuardGoPlatformService(): PlatformService<*> {
+actual fun createQuicPlatformService(): PlatformService<*> {
     // Placeholder: Implement iOS WireGuard Go service
     throw UnsupportedOperationException("Placeholder: Implement iOS WireGuard Go platform service")
 }

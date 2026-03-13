@@ -9,7 +9,7 @@ import com.rafambn.kmpvpn.address.VpnAddress
  * JVM implementation of WireGuard Go platform service
  * Delegates to OS-specific implementations
  */
-actual fun createWireGuardGoPlatformService(): PlatformService<*> {
+actual fun createQuicPlatformService(): PlatformService<*> {
     return when (Platform.currentOS) {
         OperatingSystem.LINUX -> LinuxWireGuardGoService()
         OperatingSystem.MACOS -> MacosWireGuardGoService()

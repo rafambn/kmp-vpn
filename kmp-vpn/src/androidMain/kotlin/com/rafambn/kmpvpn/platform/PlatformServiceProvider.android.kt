@@ -3,7 +3,7 @@ package com.rafambn.kmpvpn.platform
 /**
  * Android implementation of WireGuard Go platform service
  */
-actual fun createWireGuardGoPlatformService(): PlatformService<*> {
+actual fun createQuicPlatformService(): PlatformService<*> {
     // Placeholder: Implement Android WireGuard Go service
     throw UnsupportedOperationException("Placeholder: Implement Android WireGuard Go platform service")
 }
