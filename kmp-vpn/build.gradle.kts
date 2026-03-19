@@ -1,6 +1,8 @@
+import gobley.gradle.GobleyHost
+import gobley.gradle.cargo.dsl.jvm
+
 plugins {
     alias(libs.plugins.multiplatform)
-    alias(libs.plugins.android.library)
     alias(libs.plugins.maven.publish)
     alias(libs.plugins.gobley.cargo)
     alias(libs.plugins.gobley.uniffi)
@@ -10,6 +12,13 @@ plugins {
 uniffi {
     generateFromLibrary {
         namespace = "kmp_vpn"
+        build.set(GobleyHost.current.rustTarget)
+    }
+}
+
+cargo {
+    builds.jvm {
+        embedRustLibrary.set(rustTarget == GobleyHost.current.rustTarget)
     }
 }
 
@@ -44,11 +53,7 @@ tasks.configureEach {
 kotlin {
     jvmToolchain(17)
 
-    androidTarget { publishLibraryVariants("release") }
     jvm()
-    iosX64()
-    iosArm64()
-    iosSimulatorArm64()
 
     sourceSets {
         commonMain.dependencies {
@@ -58,25 +63,6 @@ kotlin {
             implementation(kotlin("test"))
         }
 
-    }
-
-    //https://kotlinlang.org/docs/native-objc-interop.html#export-of-kdoc-comments-to-generated-objective-c-headers
-    targets.withType<org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget> {
-        compilations["main"].compileTaskProvider.configure {
-            compilerOptions {
-                freeCompilerArgs.add("-Xexport-kdoc")
-            }
-        }
-    }
-
-}
-
-android {
-    namespace = "com.rafambn"
-    compileSdk = 35
-
-    defaultConfig {
-        minSdk = 21
     }
 }
 

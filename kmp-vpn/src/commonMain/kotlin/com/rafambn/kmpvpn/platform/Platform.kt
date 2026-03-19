@@ -7,8 +7,6 @@ enum class OperatingSystem {
     LINUX,
     MACOS,
     WINDOWS,
-    ANDROID,
-    IOS,
     UNKNOWN
 }
 

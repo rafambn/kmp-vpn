@@ -9,7 +9,6 @@ class Vpn(
     val nativeInterfaceName: String,
     engine: Engine = Engine.BORINGTUN,
     val vpnConfiguration: VpnConfiguration,
-    val peer: VpnPeer? = null,
     val onAlert: ((Pair<ErrorCode, String>) -> Unit)? = null
 ) : AutoCloseable {
 
@@ -42,8 +41,7 @@ class Vpn(
 
         val req = StartRequest(
             configuration = vpnConfiguration,
-            interfaceName = nativeInterfaceName,
-            peer = peer
+            interfaceName = nativeInterfaceName
         )
 
         adapter = platformService.start(req)

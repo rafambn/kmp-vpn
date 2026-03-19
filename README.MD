@@ -2,11 +2,11 @@
 
 Kotlin Multiplatform Library
 
+Current library targets: JVM/desktop.
+
 ### Run Sample App
 
  - Desktop JVM: `./gradlew :sample:composeApp:run`
- - Android: `open project in Android Studio and run the sample app`
- - iOS: `open 'sample/iosApp/iosApp.xcodeproj' in Xcode and run the sample app`
 
 ### Publish to MavenLocal
 
