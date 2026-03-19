@@ -4,6 +4,16 @@ Kotlin Multiplatform Library
 
 Current library targets: JVM/desktop.
 
+## New VPN Rebuild Modules (Phase 01)
+
+- `:new-vpn`: core orchestration API and contract boundaries.
+- `:new-vpn-daemon-protocol`: typed daemon request/response models shared by JVM components.
+- `:new-vpn-daemon-jvm`: privileged daemon executable scaffold.
+- `:new-vpn-daemon-client-jvm`: JVM client scaffold for daemon IPC.
+
+Architecture checklist: `docs/new-vpn-rebuild/01-architecture-review-checklist.md`  
+CI entry task (phase 01): `./gradlew ciPhase01`
+
 ### Run Sample App
 
  - Desktop JVM: `./gradlew :sample:composeApp:run`

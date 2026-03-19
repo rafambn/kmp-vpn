@@ -33,3 +33,6 @@ dependencyResolutionManagement {
 }
 include(":kmp-vpn")
 include(":new-vpn")
+include(":new-vpn-daemon-protocol")
+include(":new-vpn-daemon-jvm")
+include(":new-vpn-daemon-client-jvm")
