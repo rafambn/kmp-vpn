@@ -39,7 +39,7 @@ actual fun createBoringTunPlatformService(): PlatformService<*> {
 // ==================== WireGuard Go Implementations ====================
 
 private class LinuxWireGuardGoService : PlatformService<VpnAddress> {
-    override fun adapter(name: String): VpnAdapter {
+    override fun adapter(interfaceName: String): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
@@ -47,11 +47,11 @@ private class LinuxWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
-    override fun start(request: StartRequest): VpnAdapter {
+    override fun start(startRequest: StartRequest): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
-    override fun stop(configuration: VpnConfiguration, adapter: VpnAdapter) {
+    override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
@@ -79,7 +79,7 @@ private class LinuxWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
-    override fun address(name: String): VpnAddress {
+    override fun address(interfaceName: String): VpnAddress {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
@@ -111,8 +111,8 @@ private class LinuxWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        throw UnsupportedOperationException("Placeholder: Implement Linux WireGuard Go")
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
     override fun isIpForwardingEnabledOnSystem(): Boolean {
@@ -141,7 +141,7 @@ private class LinuxWireGuardGoService : PlatformService<VpnAddress> {
 }
 
 private class MacosWireGuardGoService : PlatformService<VpnAddress> {
-    override fun adapter(name: String): VpnAdapter {
+    override fun adapter(interfaceName: String): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
@@ -149,11 +149,11 @@ private class MacosWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
-    override fun start(request: StartRequest): VpnAdapter {
+    override fun start(startRequest: StartRequest): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
-    override fun stop(configuration: VpnConfiguration, adapter: VpnAdapter) {
+    override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
@@ -181,7 +181,7 @@ private class MacosWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
-    override fun address(name: String): VpnAddress {
+    override fun address(interfaceName: String): VpnAddress {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
@@ -213,8 +213,8 @@ private class MacosWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        throw UnsupportedOperationException("Placeholder: Implement macOS WireGuard Go")
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
     override fun isIpForwardingEnabledOnSystem(): Boolean {
@@ -243,7 +243,7 @@ private class MacosWireGuardGoService : PlatformService<VpnAddress> {
 }
 
 private class WindowsWireGuardGoService : PlatformService<VpnAddress> {
-    override fun adapter(name: String): VpnAdapter {
+    override fun adapter(interfaceName: String): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
@@ -251,11 +251,11 @@ private class WindowsWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
-    override fun start(request: StartRequest): VpnAdapter {
+    override fun start(startRequest: StartRequest): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
-    override fun stop(configuration: VpnConfiguration, adapter: VpnAdapter) {
+    override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
@@ -283,7 +283,7 @@ private class WindowsWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
-    override fun address(name: String): VpnAddress {
+    override fun address(interfaceName: String): VpnAddress {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
@@ -315,8 +315,8 @@ private class WindowsWireGuardGoService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        throw UnsupportedOperationException("Placeholder: Implement Windows WireGuard Go")
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
     override fun isIpForwardingEnabledOnSystem(): Boolean {
@@ -347,7 +347,7 @@ private class WindowsWireGuardGoService : PlatformService<VpnAddress> {
 // ==================== BoringTun Implementations ====================
 
 private class LinuxBoringTunService : PlatformService<VpnAddress> {
-    override fun adapter(name: String): VpnAdapter {
+    override fun adapter(interfaceName: String): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
@@ -355,11 +355,11 @@ private class LinuxBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
-    override fun start(request: StartRequest): VpnAdapter {
+    override fun start(startRequest: StartRequest): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
-    override fun stop(configuration: VpnConfiguration, adapter: VpnAdapter) {
+    override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
@@ -387,7 +387,7 @@ private class LinuxBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
-    override fun address(name: String): VpnAddress {
+    override fun address(interfaceName: String): VpnAddress {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
@@ -419,8 +419,8 @@ private class LinuxBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        throw UnsupportedOperationException("Placeholder: Implement Linux BoringTun")
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
     override fun isIpForwardingEnabledOnSystem(): Boolean {
@@ -449,7 +449,7 @@ private class LinuxBoringTunService : PlatformService<VpnAddress> {
 }
 
 private class MacosBoringTunService : PlatformService<VpnAddress> {
-    override fun adapter(name: String): VpnAdapter {
+    override fun adapter(interfaceName: String): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
@@ -457,11 +457,11 @@ private class MacosBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
-    override fun start(request: StartRequest): VpnAdapter {
+    override fun start(startRequest: StartRequest): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
-    override fun stop(configuration: VpnConfiguration, adapter: VpnAdapter) {
+    override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
@@ -489,7 +489,7 @@ private class MacosBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
-    override fun address(name: String): VpnAddress {
+    override fun address(interfaceName: String): VpnAddress {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
@@ -521,8 +521,8 @@ private class MacosBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        throw UnsupportedOperationException("Placeholder: Implement macOS BoringTun")
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
     override fun isIpForwardingEnabledOnSystem(): Boolean {
@@ -551,7 +551,7 @@ private class MacosBoringTunService : PlatformService<VpnAddress> {
 }
 
 private class WindowsBoringTunService : PlatformService<VpnAddress> {
-    override fun adapter(name: String): VpnAdapter {
+    override fun adapter(interfaceName: String): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
@@ -559,11 +559,11 @@ private class WindowsBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
-    override fun start(request: StartRequest): VpnAdapter {
+    override fun start(startRequest: StartRequest): VpnAdapter {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
-    override fun stop(configuration: VpnConfiguration, adapter: VpnAdapter) {
+    override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
@@ -591,7 +591,7 @@ private class WindowsBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
-    override fun address(name: String): VpnAddress {
+    override fun address(interfaceName: String): VpnAddress {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
@@ -623,8 +623,8 @@ private class WindowsBoringTunService : PlatformService<VpnAddress> {
         throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        throw UnsupportedOperationException("Placeholder: Implement Windows BoringTun")
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
     override fun isIpForwardingEnabledOnSystem(): Boolean {

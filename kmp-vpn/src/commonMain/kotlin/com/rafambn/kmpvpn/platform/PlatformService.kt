@@ -46,20 +46,20 @@ interface PlatformService<ADDRESS : VpnAddress> {
 
     fun resetDefaultGatewayPeer()
 
-    fun address(name: String): ADDRESS
+    fun address(interfaceName: String): ADDRESS
 
-    fun addressExists(nativeName: String): Boolean {
+    fun addressExists(interfaceName: String): Boolean {
         for (addr in addresses()) {
-            if (addr.name() == nativeName) return true
+            if (addr.nativeName() == interfaceName) return true
         }
         return false
     }
 
-    fun adapter(nativeName: String): VpnAdapter
+    fun adapter(interfaceName: String): VpnAdapter
 
-    fun adapterExists(nativeName: String): Boolean {
+    fun adapterExists(interfaceName: String): Boolean {
         for (addr in adapters()) {
-            if (addr.address().nativeName() == nativeName) return true
+            if (addr.address().nativeName() == interfaceName) return true
         }
         return false
     }
@@ -82,7 +82,7 @@ interface PlatformService<ADDRESS : VpnAddress> {
 
     fun remove(vpnAdapter: VpnAdapter, publicKey: String)
 
-    fun isValidNativeInterfaceName(name: String): Boolean
+    fun isValidInterfaceName(interfaceName: String): Boolean
 
     fun isIpForwardingEnabledOnSystem(): Boolean
 

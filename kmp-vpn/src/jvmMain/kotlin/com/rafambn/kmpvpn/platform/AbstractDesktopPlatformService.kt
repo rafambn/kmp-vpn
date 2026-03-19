@@ -38,18 +38,16 @@ abstract class AbstractDesktopPlatformService<I : VpnAddress> : AbstractPlatform
         val interfaceName = startRequest.interfaceName
         var ip: I? = null
 
-        interfaceName?.let { nativeIName ->
-            val addr = find(nativeIName, addresses)
-            if (addr == null) {
-                ip = add(nativeIName, "wireguard")
-            } else {
-                val publicKey = getPublicKey(nativeIName)
-                publicKey?.let {
-                    if (it == configuration.publicKey) {
-                        ip = addr
-                    } else {
-                        throw IOException("$nativeIName is already in use")
-                    }
+        val addr = find(interfaceName, addresses)
+        if (addr == null) {
+            ip = add(interfaceName, "wireguard")
+        } else {
+            val publicKey = getPublicKey(interfaceName)
+            publicKey?.let {
+                if (it == configuration.publicKey) {
+                    ip = addr
+                } else {
+                    throw IOException("$interfaceName is already in use")
                 }
             }
         }

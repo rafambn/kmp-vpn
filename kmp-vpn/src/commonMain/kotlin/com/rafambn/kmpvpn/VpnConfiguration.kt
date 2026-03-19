@@ -3,6 +3,8 @@ package com.rafambn.kmpvpn
 
 interface VpnConfiguration : VpnAdapterConfiguration {
 
+    val interfaceName: String
+
     val preUp: MutableList<String>
 
     val postUp: MutableList<String>
@@ -24,6 +26,7 @@ interface VpnConfiguration : VpnAdapterConfiguration {
 }
 
 class DefaultVpnConfiguration(
+    override val interfaceName: String,
     override val preUp: MutableList<String> = mutableListOf(),
     override val postUp: MutableList<String> = mutableListOf(),
     override val preDown: MutableList<String> = mutableListOf(),

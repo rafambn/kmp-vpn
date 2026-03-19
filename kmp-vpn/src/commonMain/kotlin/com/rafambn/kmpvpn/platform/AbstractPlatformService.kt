@@ -83,12 +83,12 @@ abstract class AbstractPlatformService<I : VpnAddress> : BasePlatformService<I>(
         throw UnsupportedOperationException("Failed to get public key for $interfaceName")
     }
 
-    override fun isValidNativeInterfaceName(name: String): Boolean {
-        return name.matches(Regex("^utun[0-9]+$"))
+    override fun isValidInterfaceName(interfaceName: String): Boolean {
+        return interfaceName.matches(Regex("^utun[0-9]+$"))
     }
 
-    final override fun address(name: String): I {
-        return find(name, addresses()) ?: throw IllegalArgumentException("No address $name")
+    final override fun address(interfaceName: String): I {
+        return find(interfaceName, addresses()) ?: throw IllegalArgumentException("No address $interfaceName")
     }
 
     companion object {

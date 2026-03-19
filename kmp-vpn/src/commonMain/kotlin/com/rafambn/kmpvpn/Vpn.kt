@@ -6,7 +6,6 @@ import com.rafambn.kmpvpn.platform.PlatformService
 import com.rafambn.kmpvpn.platform.createPlatformService
 
 class Vpn(
-    val nativeInterfaceName: String,
     engine: Engine = Engine.BORINGTUN,
     val vpnConfiguration: VpnConfiguration,
     val onAlert: ((Pair<ErrorCode, String>) -> Unit)? = null
@@ -16,15 +15,18 @@ class Vpn(
     private var adapter: VpnAdapter? = null
 
     init {
-        require(nativeInterfaceName.isNotEmpty()) { "Interface name cannot be empty" }
-        require(nativeInterfaceName.matches(Regex("^utun[0-9]+$"))) {
-            "Interface name must match utun[0-9]+ format (e.g., utun0, utun1, utun42)"
-        }
+        val interfaceName = vpnConfiguration.interfaceName
+
+        require(interfaceName.isNotEmpty()) { "Interface name cannot be empty" }
 
         platformService = createPlatformService(engine)
 
+        require(platformService.isValidInterfaceName(interfaceName)) {
+            "Interface name must match utun[0-9]+ format (e.g., utun0, utun1, utun42)"
+        }
+
         try {
-            adapter = platformService.adapter(nativeInterfaceName)
+            adapter = platformService.adapter(interfaceName)
         } catch (_: Exception) {
             // Silently continue if adapter resolution fails
         }
@@ -39,10 +41,7 @@ class Vpn(
             throw IllegalStateException("`$shortName` already exists and is up")
         }
 
-        val req = StartRequest(
-            configuration = vpnConfiguration,
-            interfaceName = nativeInterfaceName
-        )
+        val req = StartRequest(configuration = vpnConfiguration)
 
         adapter = platformService.start(req)
     }

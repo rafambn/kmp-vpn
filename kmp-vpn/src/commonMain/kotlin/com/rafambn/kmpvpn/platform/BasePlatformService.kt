@@ -43,28 +43,28 @@ abstract class BasePlatformService<I : VpnAddress> : PlatformService<I> {
         }
     }
 
-    override fun adapter(nativeName: String): VpnAdapter {
-        return findAdapter(nativeName, adapters()) ?: throw IllegalArgumentException("No adapter $nativeName")
+    override fun adapter(interfaceName: String): VpnAdapter {
+        return findAdapter(interfaceName, adapters()) ?: throw IllegalArgumentException("No adapter $interfaceName")
     }
 
     protected open fun onStop(configuration: VpnConfiguration, session: VpnAdapter) {
     }
 
-    protected fun exists(nativeName: String?, links: Iterable<I>): Boolean {
+    protected fun exists(interfaceName: String?, links: Iterable<I>): Boolean {
         return try {
-            find(nativeName, links) != null
+            find(interfaceName, links) != null
         } catch (iae: IllegalArgumentException) {
             false
         }
     }
 
-    protected fun find(nativeName: String?, links: Iterable<I>): I? {
-        for (link in links) if (nativeName == link.nativeName()) return link
+    protected fun find(interfaceName: String?, links: Iterable<I>): I? {
+        for (link in links) if (interfaceName == link.nativeName()) return link
         return null
     }
 
-    protected fun findAdapter(nativeName: String?, links: Iterable<VpnAdapter>): VpnAdapter? {
-        for (link in links) if (nativeName == link.address().nativeName()) return link
+    protected fun findAdapter(interfaceName: String?, links: Iterable<VpnAdapter>): VpnAdapter? {
+        for (link in links) if (interfaceName == link.address().nativeName()) return link
         return null
     }
 }
