@@ -41,8 +41,6 @@ interface PlatformService<ADDRESS : VpnAddress> {
 
     fun adapters(): MutableList<VpnAdapter>
 
-    fun runHook(configuration: VpnConfiguration, session: VpnAdapter, vararg hookScript: String)
-
     fun defaultGatewayPeer(): VpnPeer?
 
     fun defaultGatewayPeer(peer: VpnPeer)

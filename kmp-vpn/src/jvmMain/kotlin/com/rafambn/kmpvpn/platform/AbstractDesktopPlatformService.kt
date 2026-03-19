@@ -9,7 +9,6 @@ import com.rafambn.kmpvpn.address.VpnAddress
 import com.rafambn.kmpvpn.dns.DNSProvider
 import com.rafambn.kmpvpn.dns.createDNSProviderFactory
 import com.rafambn.kmpvpn.util.IpUtil
-import com.rafambn.kmpvpn.util.Util
 import java.io.IOException
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -138,11 +137,6 @@ abstract class AbstractDesktopPlatformService<I : VpnAddress> : AbstractPlatform
     @Throws(IOException::class)
     override fun start(configuration: VpnConfiguration): VpnAdapter {
         val session = VpnAdapter(this)
-        val config = configuration
-
-        if (!config.preUp.isEmpty()) {
-            runHook(config, session, *config.preUp.toTypedArray())
-        }
 
         try {
             onStart(configuration, session)
@@ -155,18 +149,13 @@ abstract class AbstractDesktopPlatformService<I : VpnAddress> : AbstractPlatform
         }
 
         val gw: VpnPeer? = defaultGatewayPeer()
-        if (gw != null && config.peers.contains(gw)) {
+        if (gw != null && configuration.peers.contains(gw)) {
             try {
                 val addr = gw.endpointAddress ?: throw IllegalStateException("No endpoint for peer.")
                 val iface = defaultGateway() ?: throw IllegalStateException("No current default gateway.")
                 onSetDefaultGateway(PlatformService.Gateway(iface.nativeIface, addr))
             } catch (e: Exception) {
             }
-        }
-
-        if (!config.postUp.isEmpty()) {
-            val p: MutableList<String> = config.postUp
-            runHook(config, session, *p.toTypedArray())
         }
 
         return session
@@ -299,14 +288,4 @@ abstract class AbstractDesktopPlatformService<I : VpnAddress> : AbstractPlatform
         }
         throw NoHandshakeException("No handshake received from ${peerOr.endpointAddress} for ${ip.shortName()} within ${timeout.toSeconds()} seconds.")
     }
-
-    @Throws(IOException::class)
-    override fun runHook(configuration: VpnConfiguration, session: VpnAdapter, vararg hookScript: String) {
-        for (cmd in hookScript) {
-            runCommand(Util.parseQuotedString(cmd))
-        }
-    }
-
-    @Throws(IOException::class)
-    protected abstract fun runCommand(commands: MutableList<String>)
 }

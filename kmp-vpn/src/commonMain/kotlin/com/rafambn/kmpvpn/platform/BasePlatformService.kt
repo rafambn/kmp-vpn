@@ -11,34 +11,20 @@ abstract class BasePlatformService<I : VpnAddress> : PlatformService<I> {
 
     override fun stop(configuration: VpnConfiguration, session: VpnAdapter) {
         try {
-            try {
-                if (!configuration.addresses.isEmpty()) {
-                    val dnsOr: DNSProvider? = dns()
-                    dnsOr?.unset(
-                        DNSProvider.DNSEntry(
-                            iface = session.address().nativeName(),
-                            ipv4Servers = IpUtil.filterIpV4Addresses(configuration.dns),
-                            ipv6Servers = IpUtil.filterIpV6Addresses(configuration.dns),
-                            domains = IpUtil.filterNames(configuration.dns)
-                        )
+            if (!configuration.addresses.isEmpty()) {
+                val dnsOr: DNSProvider? = dns()
+                dnsOr?.unset(
+                    DNSProvider.DNSEntry(
+                        iface = session.address().nativeName(),
+                        ipv4Servers = IpUtil.filterIpV4Addresses(configuration.dns),
+                        ipv6Servers = IpUtil.filterIpV6Addresses(configuration.dns),
+                        domains = IpUtil.filterNames(configuration.dns)
                     )
-                }
-            } finally {
-                if (!configuration.preDown.isEmpty()) {
-                    val p: MutableList<String> = configuration.preDown
-                    runHook(configuration, session, *p.toTypedArray())
-                }
-                session.stop()
+                )
             }
+            session.stop()
         } finally {
-            try {
-                onStop(configuration, session)
-            } finally {
-                if (!configuration.postDown.isEmpty()) {
-                    val p: MutableList<String> = configuration.postDown
-                    runHook(configuration, session, *p.toTypedArray())
-                }
-            }
+            onStop(configuration, session)
         }
     }
 

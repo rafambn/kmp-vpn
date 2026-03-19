@@ -5,14 +5,6 @@ interface VpnConfiguration : VpnAdapterConfiguration {
 
     val interfaceName: String
 
-    val preUp: MutableList<String>
-
-    val postUp: MutableList<String>
-
-    val preDown: MutableList<String>
-
-    val postDown: MutableList<String>
-
     val dns: MutableList<String>
 
     val mtu: Int?
@@ -27,10 +19,6 @@ interface VpnConfiguration : VpnAdapterConfiguration {
 
 class DefaultVpnConfiguration(
     override val interfaceName: String,
-    override val preUp: MutableList<String> = mutableListOf(),
-    override val postUp: MutableList<String> = mutableListOf(),
-    override val preDown: MutableList<String> = mutableListOf(),
-    override val postDown: MutableList<String> = mutableListOf(),
     override val dns: MutableList<String> = mutableListOf(),
     override val mtu: Int? = null,
     override val addresses: MutableList<String> = mutableListOf(),
