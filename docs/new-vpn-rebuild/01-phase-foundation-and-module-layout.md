@@ -7,7 +7,7 @@ Establish a clean project structure for a full rebuild, using `:new-vpn` as the 
 ## Inputs from Current Baseline
 
 1. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/Vpn.kt` (minimal facade)
-2. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/VpnAdapter.kt` (in-memory adapter)
+2. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/platform/iface/VpnInterface.kt` (merged interface/configuration contract)
 3. `new-vpn/src/commonMain/rust/lib.rs` (working tunnel bindings)
 4. `settings.gradle.kts` already includes `:new-vpn`
 

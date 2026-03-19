@@ -1,69 +1,265 @@
 package com.rafambn.kmpvpn
 
+import com.rafambn.kmpvpn.platform.iface.InMemoryVpnInterface
+import com.rafambn.kmpvpn.platform.iface.VpnInterface
+import com.rafambn.kmpvpn.session.InMemorySessionManager
+import com.rafambn.kmpvpn.session.SessionManager
+
 /**
- * Minimal VPN facade retained for the refactor branch.
+ * Core orchestrator facade for VPN lifecycle operations.
  *
- * This version intentionally keeps only in-memory lifecycle state and the
- * core project models. Platform-specific behavior now lives outside this module.
+ * This contract owns lifecycle transitions while delegating session and
+ * interface concerns to [SessionManager] and [VpnInterface].
  */
-class Vpn(
-    val engine: Engine = Engine.BORINGTUN,
+class Vpn internal constructor(
+    val engine: Engine,
     val vpnConfiguration: VpnConfiguration,
-    val onAlert: ((String) -> Unit)? = null
+    private val onEvent: ((VpnEvent) -> Unit)?,
+    private val sessionManager: SessionManager,
+    private val vpnInterface: VpnInterface,
 ) : AutoCloseable {
 
-    private var adapter: VpnAdapter? = null
+    constructor(
+        engine: Engine = Engine.BORINGTUN,
+        vpnConfiguration: VpnConfiguration,
+        onEvent: ((VpnEvent) -> Unit)? = null,
+    ) : this(
+        engine = engine,
+        vpnConfiguration = vpnConfiguration,
+        onEvent = onEvent,
+        sessionManager = InMemorySessionManager(),
+        vpnInterface = InMemoryVpnInterface(),
+    )
 
     init {
-        require(vpnConfiguration.interfaceName.isNotBlank()) {
-            "Interface name cannot be empty"
+        requireValidConfiguration(vpnConfiguration)
+    }
+
+    /**
+     * Returns current lifecycle state derived from current system observations.
+     */
+    fun state(): VpnState {
+        if (!exists()) {
+            return VpnState.NotCreated
+        }
+
+        return if (isRunning()) {
+            VpnState.Running(vpnConfiguration.interfaceName)
+        } else {
+            VpnState.Created(vpnConfiguration.interfaceName)
         }
     }
 
+    /**
+     * Returns whether the VPN interface currently exists.
+     */
     fun exists(): Boolean {
-        return adapter != null
+        return vpnInterface.exists(vpnConfiguration.interfaceName)
     }
 
+    /**
+     * Returns whether the interface exists and active tunnel sessions are running.
+     */
     fun isRunning(): Boolean {
-        return adapter?.isRunning() == true
-    }
-
-    fun create(): VpnAdapter {
-        adapter?.let { return it }
-
-        return VpnAdapter(
-            interfaceName = vpnConfiguration.interfaceName,
-            initialConfiguration = vpnConfiguration
-        ).also { adapter = it }
-    }
-
-    fun start(): VpnAdapter {
-        val currentAdapter = create()
-        if (currentAdapter.isRunning()) {
-            val message = "`${currentAdapter.interfaceName}` already exists and is up"
-            onAlert?.invoke(message)
-            throw IllegalStateException(message)
+        if (!exists()) {
+            return false
+        }
+        if (!vpnInterface.isUp()) {
+            return false
         }
 
-        currentAdapter.start()
-        return currentAdapter
+        return sessionManager.sessions().any { session -> session.isActive }
     }
 
+    /**
+     * Creates the interface and returns the managed interface contract.
+     */
+    fun create(): VpnInterface {
+        try {
+            if (!exists()) {
+                vpnInterface.create(vpnConfiguration)
+            }
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `create` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        try {
+            sessionManager.reconcileSessions(vpnInterface.configuration().adapter)
+        } catch (throwable: Throwable) {
+            val description = "Session operation `reconcileSessions` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        return vpnInterface
+    }
+
+    /**
+     * Starts the interface and ensures sessions are active.
+     */
+    fun start(): VpnInterface {
+        val managedInterface = create()
+        if (isRunning()) {
+            val description = "`${vpnConfiguration.interfaceName}` already exists and is up"
+            publishEvent(VpnEvent.Alert(description))
+            throw IllegalStateException(description)
+        }
+
+        val currentConfiguration = try {
+            managedInterface.configuration()
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `configuration` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+        requireValidConfiguration(currentConfiguration)
+
+        try {
+            managedInterface.reconfigure(currentConfiguration)
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `reconfigure` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        try {
+            sessionManager.ensureSessions(currentConfiguration.adapter)
+        } catch (throwable: Throwable) {
+            val description = "Session operation `ensureSessions` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        try {
+            managedInterface.up()
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `up` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        return managedInterface
+    }
+
+    /**
+     * Stops the interface. This operation is idempotent.
+     */
     fun stop() {
-        adapter?.stop()
+        if (!exists()) {
+            return
+        }
+
+        try {
+            sessionManager.closeAll()
+        } catch (throwable: Throwable) {
+            val description = "Session operation `closeAll` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        try {
+            vpnInterface.down()
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `down` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
     }
 
+    /**
+     * Deletes the interface. This operation is idempotent.
+     */
     fun delete() {
-        adapter?.delete()
-        adapter = null
+        if (!exists()) {
+            return
+        }
+
+        var sessionsClosed = false
+        if (vpnInterface.isUp()) {
+            try {
+                sessionManager.closeAll()
+            } catch (throwable: Throwable) {
+                val description = "Session operation `closeAll` failed: ${throwable.message ?: "unknown"}"
+                publishEvent(VpnEvent.Failure(description))
+                throw IllegalStateException(description, throwable)
+            }
+            sessionsClosed = true
+
+            try {
+                vpnInterface.down()
+            } catch (throwable: Throwable) {
+                val description = "Interface operation `down` failed: ${throwable.message ?: "unknown"}"
+                publishEvent(VpnEvent.Failure(description))
+                throw IllegalStateException(description, throwable)
+            }
+        }
+
+        if (!sessionsClosed) {
+            try {
+                sessionManager.closeAll()
+            } catch (throwable: Throwable) {
+                val description = "Session operation `closeAll` failed: ${throwable.message ?: "unknown"}"
+                publishEvent(VpnEvent.Failure(description))
+                throw IllegalStateException(description, throwable)
+            }
+        }
+
+        try {
+            vpnInterface.delete()
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `delete` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
     }
 
-    fun adapter(): VpnAdapter? {
-        return adapter
+    /**
+     * Returns current effective interface configuration.
+     */
+    fun configuration(): VpnConfiguration {
+        return try {
+            vpnInterface.configuration()
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `configuration` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+    }
+
+    /**
+     * Replaces current interface configuration and reconciles sessions.
+     */
+    fun reconfigure(config: VpnConfiguration) {
+        requireValidConfiguration(config)
+        require(config.interfaceName == vpnConfiguration.interfaceName) {
+            "Cannot reconfigure interface `${vpnConfiguration.interfaceName}` using `${config.interfaceName}`"
+        }
+
+        try {
+            vpnInterface.reconfigure(config)
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `reconfigure` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        try {
+            sessionManager.reconcileSessions(vpnInterface.configuration().adapter)
+        } catch (throwable: Throwable) {
+            val description = "Session operation `reconcileSessions` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
     }
 
     override fun close() {
         delete()
+    }
+
+    private fun publishEvent(event: VpnEvent) {
+        onEvent?.invoke(event)
     }
 
     companion object {

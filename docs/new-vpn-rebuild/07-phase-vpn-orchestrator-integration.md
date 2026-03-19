@@ -6,8 +6,8 @@ Wire `Vpn` to the new architecture end-to-end: `SessionManager` + `VpnInterface`
 
 ## Scope
 
-1. Replace internal `VpnAdapter` lifecycle ownership in `Vpn`.
-2. Implement deterministic orchestration state machine.
+1. Integrate orchestrator behavior against merged `VpnInterface` ownership.
+2. Implement deterministic orchestration flow with observational state derivation.
 3. Ensure rollback safety across partial failures.
 
 ## Work Breakdown
@@ -31,7 +31,7 @@ Wire `Vpn` to the new architecture end-to-end: `SessionManager` + `VpnInterface`
 ## Deliverables
 
 1. New orchestrator-based `Vpn` implementation in `:new-vpn`.
-2. Adapter compatibility policy decided and documented.
+2. Merged interface-configuration policy validated and documented.
 3. Lifecycle integration tests with fake and JVM daemon-backed paths.
 
 ## Exit Criteria

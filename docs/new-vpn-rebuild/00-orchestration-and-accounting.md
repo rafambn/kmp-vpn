@@ -11,7 +11,7 @@ Build a new architecture in `:new-vpn` where:
 
 This plan assumes the current baseline in `new-vpn`:
 
-- Kotlin: minimal in-memory `Vpn`, `VpnAdapter`, and configuration models.
+- Kotlin: minimal in-memory `Vpn` and merged `VpnInterface` configuration/lifecycle models.
 - Rust: working `TunnelSession` UniFFI binding with packet operations.
 
 ## Target Module Topology
@@ -69,7 +69,7 @@ Use this table as the source of truth during execution.
 | Phase | Status | Planned EP | Spent EP | Start Date | End Date | Gate Result | Notes |
 |---|---|---:|---:|---|---|---|---|
 | 01 | Completed | 8 | 8 | 2026-03-19 | 2026-03-19 | Passed | Module scaffolding, architecture checks, and CI entry tasks added |
-| 02 | Not started | 10 | 0 | - | - | - | - |
+| 02 | Completed | 10 | 10 | 2026-03-19 | 2026-03-19 | Passed | Core contracts added, `VpnAdapter` merged into `VpnInterface`, and state simplified to live observations |
 | 03 | Not started | 14 | 0 | - | - | - | - |
 | 04 | Not started | 16 | 0 | - | - | - | - |
 | 05 | Not started | 12 | 0 | - | - | - | - |
@@ -106,6 +106,30 @@ Record architecture decisions in this file as appended entries.
 - Context:
 - Decision:
 - Consequence:
+
+### Decision Entry ADR-02
+
+- Decision ID: ADR-02
+- Date: 2026-03-19
+- Context: Phase 02 needs stable orchestrator/session/interface semantics before implementation phases 03 and 04.
+- Decision: Freeze `VpnState`, `SessionManager`, `VpnInterface`, and `VpnEvent` contracts with invariant rules for interface name, peer uniqueness, and idempotent stop/delete.
+- Consequence: Next phases can implement concrete backends without changing core orchestration contracts.
+
+### Decision Entry ADR-03
+
+- Decision ID: ADR-03
+- Date: 2026-03-19
+- Context: `VpnInterface` and `VpnAdapter` overlapped in lifecycle/configuration ownership.
+- Decision: Merge `VpnAdapter` semantics into `VpnInterface`; `Vpn` orchestrates `SessionManager` + `VpnInterface` only.
+- Consequence: Phase 04 focuses on concrete platform implementations and command execution boundaries, while phase 07 no longer includes adapter-removal work.
+
+### Decision Entry ADR-04
+
+- Decision ID: ADR-04
+- Date: 2026-03-19
+- Context: Persisted synthetic state markers (`deletedByOrchestrator`, `lastFailure`, `lastObservedState`) created divergence from real OS/daemon observations.
+- Decision: Remove synthetic state memory from `Vpn`; `state()` now derives from live interface/session observations only.
+- Consequence: Phase 07 state-machine work is reduced; failure/delete meaning is represented by operation result and `VpnEvent` stream.
 
 ## Definition of Done (Program Level)
 

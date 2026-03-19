@@ -9,5 +9,5 @@ data class VpnPeer(
     val publicKey: String,
     val allowedIps: List<String> = emptyList(),
     val persistentKeepalive: Int? = null,
-    val presharedKey: String? = null
+    val presharedKey: String? = null,
 )

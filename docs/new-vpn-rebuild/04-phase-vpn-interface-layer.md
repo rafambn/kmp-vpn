@@ -8,7 +8,7 @@ Implement OS interaction behind a dedicated `VpnInterface` boundary.
 
 1. Build interface lifecycle abstraction independent of session code.
 2. Provide JVM implementation that can run with real or stub executors.
-3. Remove interface concerns from `VpnAdapter` semantics.
+3. Implement merged interface+configuration semantics in `VpnInterface`.
 
 ## Work Breakdown
 
@@ -17,6 +17,7 @@ Implement OS interaction behind a dedicated `VpnInterface` boundary.
 - create/check/delete interface
 - up/down state
 - apply MTU/address/routes/DNS
+- reconfigure/append/sync/remove peer configuration
 - read interface information and peer stats
 3. Add `InterfaceCommandExecutor` boundary so daemon migration can plug in later.
 4. Implement fake in-memory interface for fast `commonTest`.
@@ -30,7 +31,7 @@ Implement OS interaction behind a dedicated `VpnInterface` boundary.
 
 ## Exit Criteria
 
-1. `Vpn` interface lifecycle can run without `VpnAdapter`.
+1. `Vpn` lifecycle runs through a single `VpnInterface` contract (no separate adapter type).
 2. Session lifecycle and interface lifecycle are independent modules/classes.
 3. Existing minimal API remains callable via orchestrator.
 

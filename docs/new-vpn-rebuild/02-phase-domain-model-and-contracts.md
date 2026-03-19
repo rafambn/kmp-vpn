@@ -13,7 +13,7 @@ Define the final core contracts before platform implementation starts.
 
 ## Contract Set
 
-1. `VpnState` (sealed class): `NotCreated`, `Created`, `Running`, `Stopping`, `Deleted`, `Failed`.
+1. `VpnState` (sealed class): observational states `NotCreated`, `Created`, `Running`.
 2. `SessionManager`:
 - `ensureSessions(config)`
 - `reconcileSessions(config)`
@@ -26,14 +26,15 @@ Define the final core contracts before platform implementation starts.
 - `up()` / `down()`
 - `delete()`
 - `isUp()`
-- `applyConfiguration(config)`
+- `configuration()`
+- `reconfigure(config)`
 - `readInformation()`
-4. `VpnLifecycleError` (sealed class) for orchestrator-level failures.
-5. `VpnEvent` stream model for lifecycle telemetry.
+4. `VpnEvent` stream model for lifecycle telemetry (`Alert(message)`, `Failure(message)`).
+   Failure and delete semantics are emitted as events/errors instead of persisted synthetic states.
 
 ## Work Breakdown
 
-1. Move mutable lifecycle state out of `VpnAdapter` into explicit models.
+1. Merge `VpnAdapter` responsibilities into `VpnInterface` and keep lifecycle state in explicit models.
 2. Create new interfaces in `commonMain` only.
 3. Add KDoc for all public contracts.
 4. Define invariants:
