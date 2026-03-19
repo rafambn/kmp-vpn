@@ -32,3 +32,4 @@ dependencyResolutionManagement {
     }
 }
 include(":kmp-vpn")
+include(":new-vpn")

@@ -1,0 +1,48 @@
+# Phase 07: VPN Orchestrator Integration
+
+## Objective
+
+Wire `Vpn` to the new architecture end-to-end: `SessionManager` + `VpnInterface` + daemon client.
+
+## Scope
+
+1. Replace internal `VpnAdapter` lifecycle ownership in `Vpn`.
+2. Implement deterministic orchestration state machine.
+3. Ensure rollback safety across partial failures.
+
+## Work Breakdown
+
+1. Refactor `Vpn` constructor wiring:
+- default factory path for production
+- injectable dependencies for testing
+2. Implement orchestration flow:
+- `create`: ensure interface exists
+- `start`: bring interface up, apply config, ensure sessions
+- `stop`: close sessions then down interface
+- `delete`: stop, delete interface, clear state
+3. Implement health checks:
+- `exists`
+- `isRunning`
+- `information`
+4. Implement transaction-style rollback:
+- if session creation fails after interface up, perform controlled unwind
+5. Keep alert callback path and map internal errors to user-facing alerts.
+
+## Deliverables
+
+1. New orchestrator-based `Vpn` implementation in `:new-vpn`.
+2. Adapter compatibility policy decided and documented.
+3. Lifecycle integration tests with fake and JVM daemon-backed paths.
+
+## Exit Criteria
+
+1. Public lifecycle API works against real daemon path.
+2. Rollback tests pass for every failure boundary.
+3. `Vpn` no longer owns transport internals directly.
+
+## Risks and Controls
+
+1. Risk: lifecycle race conditions.
+Control: explicit synchronized state transitions and idempotent operations.
+2. Risk: hidden coupling returns through convenience methods.
+Control: enforce single-direction dependency and contract tests.
