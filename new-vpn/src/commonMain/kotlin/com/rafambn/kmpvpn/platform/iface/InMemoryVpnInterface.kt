@@ -71,6 +71,14 @@ internal class InMemoryVpnInterface : VpnInterface {
             addresses = vpnConfiguration?.addresses?.toList() ?: emptyList(),
             dnsServers = vpnConfiguration?.dns?.toList() ?: emptyList(),
             mtu = vpnConfiguration?.mtu,
+            peerStats = vpnConfiguration?.adapter?.peers.orEmpty().map { peer ->
+                VpnPeerStats(
+                    publicKey = peer.publicKey,
+                    receivedBytes = 0L,
+                    transmittedBytes = 0L,
+                    lastHandshakeEpochSeconds = null,
+                )
+            },
         )
     }
 

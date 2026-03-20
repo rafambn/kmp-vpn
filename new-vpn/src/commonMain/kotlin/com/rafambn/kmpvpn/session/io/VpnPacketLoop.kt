@@ -16,7 +16,7 @@ class VpnPacketLoop(
         }
     }
 
-    fun pollOnce() {
+    suspend fun pollOnce() {
         processTunInput()
         processUdpInput()
         if (periodicTicker()) {
@@ -24,7 +24,7 @@ class VpnPacketLoop(
         }
     }
 
-    private fun processTunInput() {
+    private suspend fun processTunInput() {
         val packet = tunPort.readPacket() ?: return
         applyPacketResult(
             result = session.encryptRawPacket(packet, packetBufferSize),
@@ -32,7 +32,7 @@ class VpnPacketLoop(
         )
     }
 
-    private fun processUdpInput() {
+    private suspend fun processUdpInput() {
         val packet = udpPort.receivePacket() ?: return
 
         var result = session.decryptToRawPacket(packet, packetBufferSize)
@@ -55,14 +55,14 @@ class VpnPacketLoop(
         }
     }
 
-    private fun processPeriodicTask() {
+    private suspend fun processPeriodicTask() {
         applyPacketResult(
             result = session.runPeriodicTask(packetBufferSize),
             operation = "runPeriodicTask",
         )
     }
 
-    private fun applyPacketResult(result: VpnPacketResult, operation: String) {
+    private suspend fun applyPacketResult(result: VpnPacketResult, operation: String) {
         when (result) {
             VpnPacketResult.Done -> Unit
             is VpnPacketResult.WriteToNetwork -> udpPort.sendPacket(result.packet)

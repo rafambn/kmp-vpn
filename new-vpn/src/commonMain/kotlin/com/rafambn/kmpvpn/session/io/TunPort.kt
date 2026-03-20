@@ -1,7 +1,7 @@
 package com.rafambn.kmpvpn.session.io
 
 interface TunPort {
-    fun readPacket(): ByteArray?
+    suspend fun readPacket(): ByteArray?
 
-    fun writePacket(packet: ByteArray)
+    suspend fun writePacket(packet: ByteArray)
 }

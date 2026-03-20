@@ -73,7 +73,7 @@ Use this table as the source of truth during execution.
 | 01 | Completed | 8 | 8 | 2026-03-19 | 2026-03-19 | Passed | Module scaffolding, architecture checks, and CI entry tasks added |
 | 02 | Completed | 10 | 10 | 2026-03-19 | 2026-03-19 | Passed | Core contracts added, `VpnAdapter` merged into `VpnInterface`, and state simplified to live observations |
 | 03 | Completed | 14 | 14 | 2026-03-19 | 2026-03-19 | Passed | Session reconciliation finalized, engine factories wired, common packet loop (`TunPort`/`UdpPort`/ticker) implemented, and loop behavior covered by tests |
-| 04 | Not started | 16 | 0 | - | - | - | - |
+| 04 | Completed | 16 | 16 | 2026-03-20 | 2026-03-20 | Passed | `PlatformInterfaceFactory` (`expect/actual`) added, JVM interface layer split behind daemon-only `InterfaceCommandExecutor` boundary, and packet I/O adapter `KtorDatagramUdpPort` delivered in `commonMain` with rollback/idempotency tests |
 | 05 | Not started | 12 | 0 | - | - | - | - |
 | 06 | Not started | 16 | 0 | - | - | - | - |
 | 07 | Not started | 12 | 0 | - | - | - | - |
@@ -141,6 +141,14 @@ Record architecture decisions in this file as appended entries.
 - Context: Architecture ownership for WireGuard runtime packet flow was ambiguous between common runtime and privileged daemon.
 - Decision: Packet data-plane (`TUN <-> UDP`, encryption/decryption, timer-driven handshake/keepalive tasks) runs in `:new-vpn` common runtime; daemon is limited to privileged OS control-plane commands.
 - Consequence: Phase 03 must deliver common packet loop contracts and runtime behavior; phases 04 and 06 provide platform I/O adapters and privileged command execution without owning transport packet forwarding.
+
+### Decision Entry ADR-06
+
+- Decision ID: ADR-06
+- Date: 2026-03-20
+- Context: Phase 04 requires JVM interface operations now, but daemon IPC will only be introduced in phase 05.
+- Decision: Introduce `InterfaceCommandExecutor` as the only command boundary consumed by `JvmVpnInterface`; forbid local OS command execution in `:new-vpn` JVM code and reserve privileged command execution for daemon-backed executors only.
+- Consequence: Phase 05 plugs daemon IPC implementations into `InterfaceCommandExecutor` without changing `Vpn`, `SessionManager`, or `VpnInterface` contracts.
 
 ## Definition of Done (Program Level)
 

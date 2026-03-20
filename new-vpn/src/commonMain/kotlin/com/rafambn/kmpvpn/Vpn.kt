@@ -1,6 +1,6 @@
 package com.rafambn.kmpvpn
 
-import com.rafambn.kmpvpn.platform.iface.InMemoryVpnInterface
+import com.rafambn.kmpvpn.platform.iface.PlatformInterfaceFactory
 import com.rafambn.kmpvpn.platform.iface.VpnInterface
 import com.rafambn.kmpvpn.session.InMemorySessionManager
 import com.rafambn.kmpvpn.session.SessionManager
@@ -22,11 +22,12 @@ class Vpn internal constructor(
         engine: Engine = Engine.BORINGTUN,
         vpnConfiguration: VpnConfiguration,
         onEvent: ((VpnEvent) -> Unit)? = null,
+        vpnInterfaceFactory: (VpnConfiguration) -> VpnInterface = PlatformInterfaceFactory::create,
     ) : this(
         vpnConfiguration = vpnConfiguration,
         onEvent = onEvent,
         sessionManager = InMemorySessionManager(engine = engine),
-        vpnInterface = InMemoryVpnInterface(),
+        vpnInterface = vpnInterfaceFactory(vpnConfiguration),
     )
 
     init {

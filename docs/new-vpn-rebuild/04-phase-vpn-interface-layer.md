@@ -4,6 +4,11 @@
 
 Implement OS interaction behind a dedicated `VpnInterface` boundary and provide platform adapters for packet I/O ports.
 
+## Implementation Status
+
+Status: Completed  
+Date: 2026-03-20
+
 ## Scope
 
 1. Build interface lifecycle abstraction independent of session code.
@@ -13,7 +18,7 @@ Implement OS interaction behind a dedicated `VpnInterface` boundary and provide 
 
 ## Work Breakdown
 
-1. Define `VpnInterfaceFactory` (expect/actual or JVM-only first).
+1. Define `PlatformInterfaceFactory` (`expect/actual`) for per-target `VpnInterface` creation.
 2. Implement `JvmVpnInterface` with operations:
 - create/check/delete interface
 - up/down state
@@ -48,3 +53,13 @@ Implement OS interaction behind a dedicated `VpnInterface` boundary and provide 
 Control: keep all OS branching inside JVM interface implementations.
 2. Risk: incomplete cleanup on failure.
 Control: add rollback contract and tests for every create/apply step.
+
+## Implementation Notes
+
+1. Added `PlatformInterfaceFactory` (`expect/actual`) and `VpnPeerStats`.
+2. Added JVM interface layer:
+- `JvmVpnInterface`
+- daemon-only `InterfaceCommandExecutor` boundary (in-memory path kept only for tests)
+3. Added JVM packet I/O adapters:
+- `KtorDatagramUdpPort` (in `commonMain`) with timeout support for non-blocking poll behavior
+4. Added reusable common test fakes (`InMemoryTunPort`, `InMemoryUdpPort`, `ManualPeriodicTicker`) and new JVM tests for idempotency, rollback, and adapter behavior.

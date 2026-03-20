@@ -1,7 +1,7 @@
 package com.rafambn.kmpvpn.session.io
 
 interface UdpPort {
-    fun receivePacket(): ByteArray?
+    suspend fun receivePacket(): ByteArray?
 
-    fun sendPacket(packet: ByteArray)
+    suspend fun sendPacket(packet: ByteArray)
 }

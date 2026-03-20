@@ -50,7 +50,6 @@ class VpnStateTransitionTest {
         val emittedEvents: MutableList<VpnEvent> = mutableListOf()
 
         val vpn = Vpn(
-            engine = Engine.BORINGTUN,
             vpnConfiguration = baseConfiguration(interfaceName = "wg2"),
             onEvent = { event -> emittedEvents += event },
             sessionManager = InMemorySessionManager(),
