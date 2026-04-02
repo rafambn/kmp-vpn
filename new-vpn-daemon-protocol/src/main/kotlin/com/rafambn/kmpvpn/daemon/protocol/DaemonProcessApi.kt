@@ -23,9 +23,7 @@ import kotlinx.rpc.annotations.Rpc
  */
 @Rpc
 interface DaemonProcessApi {
-    suspend fun ping(
-        nonce: String = "ping",
-    ): DaemonCommandResult<PingResponse>
+    suspend fun ping(): DaemonCommandResult<PingResponse>
 
     suspend fun interfaceExists(
         interfaceName: String,

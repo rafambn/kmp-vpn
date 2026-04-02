@@ -1,6 +1,5 @@
 package com.rafambn.kmpvpn.daemon
 
-import com.rafambn.kmpvpn.daemon.protocol.DAEMON_HELLO_TOKEN
 import com.rafambn.kmpvpn.daemon.protocol.DaemonCommandResult
 import com.rafambn.kmpvpn.daemon.protocol.DaemonErrorKind
 import com.rafambn.kmpvpn.daemon.protocol.response.PingResponse
@@ -8,17 +7,16 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DaemonProcessApiSmokeTest {
 
     @Test
-    fun pingReturnsHello() = runBlocking {
-        val response = DaemonProcessApiImpl().ping(
-            nonce = "probe",
-        )
-        val success = response as DaemonCommandResult.Success<PingResponse>
+    fun pingReturnsSuccess() = runBlocking {
+        val response = DaemonProcessApiImpl().ping()
 
-        assertEquals(DAEMON_HELLO_TOKEN, success.data.helloToken)
+        assertTrue(response.isSuccess)
+        assertEquals(PingResponse, (response as DaemonCommandResult.Success).data)
     }
 
     @Test
@@ -30,14 +28,5 @@ class DaemonProcessApiSmokeTest {
 
         assertEquals(DaemonErrorKind.UNKNOWN_COMMAND, failure.kind)
         assertFalse(failure.message.isBlank())
-    }
-
-    @Test
-    fun invalidInputReturnsValidationFailureInsteadOfThrowing() = runBlocking {
-        val response = DaemonProcessApiImpl().ping(nonce = "")
-        val failure = response as DaemonCommandResult.Failure
-
-        assertEquals(DaemonErrorKind.VALIDATION_ERROR, failure.kind)
-        assertEquals("Ping nonce cannot be blank", failure.message)
     }
 }

@@ -7,7 +7,6 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ApplyPeerConfigurationRespons
 import com.rafambn.kmpvpn.daemon.protocol.request.ApplyPeerConfigurationRequest
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyRoutesResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
-import com.rafambn.kmpvpn.daemon.protocol.DAEMON_HELLO_TOKEN
 import com.rafambn.kmpvpn.daemon.protocol.DaemonCommandResult
 import com.rafambn.kmpvpn.daemon.protocol.DaemonProcessApi
 import com.rafambn.kmpvpn.daemon.protocol.DaemonErrorKind
@@ -19,14 +18,8 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ReadPeerStatsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.SetInterfaceStateResponse
 
 class DaemonProcessApiImpl : DaemonProcessApi {
-    override suspend fun ping(nonce: String): DaemonCommandResult<PingResponse> {
-        if (nonce.isBlank()) {
-            return validationFailure(message = "Ping nonce cannot be blank")
-        }
-
-        return DaemonCommandResult.success(
-            data = PingResponse(helloToken = DAEMON_HELLO_TOKEN),
-        )
+    override suspend fun ping(): DaemonCommandResult<PingResponse> {
+        return DaemonCommandResult.success(data = PingResponse)
     }
 
     override suspend fun interfaceExists(

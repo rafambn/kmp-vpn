@@ -1,6 +1,5 @@
 package com.rafambn.kmpvpn.daemon.client
 
-import com.rafambn.kmpvpn.daemon.protocol.DAEMON_HELLO_TOKEN
 import com.rafambn.kmpvpn.daemon.protocol.DaemonCommandResult
 import com.rafambn.kmpvpn.daemon.protocol.DaemonProcessApi
 import com.rafambn.kmpvpn.daemon.protocol.request.ApplyPeerConfigurationRequest
@@ -51,28 +50,19 @@ class DaemonProcessClient(
     private val service = rpcClient.withService<DaemonProcessApi>()
 
     suspend fun handshake(timeout: Duration = Duration.ofSeconds(5)): DaemonCommandResult<PingResponse> {
-        val response = callWithTimeout(timeout) {
-            service.ping(nonce = "handshake")
-        }
+        val response = callWithTimeout(timeout) { service.ping() }
 
-        val success = response as? DaemonCommandResult.Success<PingResponse>
-            ?: throw DaemonClientException.ProtocolViolation(
-                message = "Handshake failed: ${(response as DaemonCommandResult.Failure).message}",
-            )
-
-        if (success.data.helloToken.trim() != DAEMON_HELLO_TOKEN) {
+        if (response is DaemonCommandResult.Failure) {
             throw DaemonClientException.ProtocolViolation(
-                message = "Invalid handshake response. Expected `$DAEMON_HELLO_TOKEN`, got `${success.data.helloToken}`",
+                message = "Handshake failed: ${response.message}",
             )
         }
 
-        return success
+        return response
     }
 
-    override suspend fun ping(nonce: String): DaemonCommandResult<PingResponse> {
-        return callWithTimeout(timeout) {
-            service.ping(nonce = nonce)
-        }
+    override suspend fun ping(): DaemonCommandResult<PingResponse> {
+        return callWithTimeout(timeout) { service.ping() }
     }
 
     override suspend fun interfaceExists(interfaceName: String): DaemonCommandResult<InterfaceExistsResponse> {

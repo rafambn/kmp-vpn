@@ -7,7 +7,6 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ApplyPeerConfigurationRespons
 import com.rafambn.kmpvpn.daemon.protocol.request.ApplyPeerConfigurationRequest
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyRoutesResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
-import com.rafambn.kmpvpn.daemon.protocol.DAEMON_HELLO_TOKEN
 import com.rafambn.kmpvpn.daemon.protocol.DaemonCommandResult
 import com.rafambn.kmpvpn.daemon.protocol.DaemonProcessApi
 import com.rafambn.kmpvpn.daemon.protocol.DaemonErrorKind
@@ -34,6 +33,7 @@ import kotlinx.rpc.krpc.serialization.json.json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class DaemonClientSmokeTest {
 
@@ -43,8 +43,8 @@ class DaemonClientSmokeTest {
         val engine = startServer(
             port = port,
             service = object : StubDaemonProcessApi() {
-                override suspend fun ping(nonce: String): DaemonCommandResult<PingResponse> {
-                    return success(PingResponse(helloToken = DAEMON_HELLO_TOKEN))
+                override suspend fun ping(): DaemonCommandResult<PingResponse> {
+                    return success(PingResponse)
                 }
 
                 override suspend fun applyDns(
@@ -67,8 +67,7 @@ class DaemonClientSmokeTest {
 
         try {
             val hello = client.handshake()
-            val helloSuccess = hello as DaemonCommandResult.Success<PingResponse>
-            assertEquals(DAEMON_HELLO_TOKEN, helloSuccess.data.helloToken)
+            assertTrue(hello.isSuccess)
 
             val response = client.applyDns(
                 interfaceName = "wg0",
@@ -90,9 +89,9 @@ class DaemonClientSmokeTest {
         val engine = startServer(
             port = port,
             service = object : StubDaemonProcessApi() {
-                override suspend fun ping(nonce: String): DaemonCommandResult<PingResponse> {
+                override suspend fun ping(): DaemonCommandResult<PingResponse> {
                     delay(300)
-                    return success(PingResponse(helloToken = DAEMON_HELLO_TOKEN))
+                    return success(PingResponse)
                 }
             },
         )
@@ -104,7 +103,7 @@ class DaemonClientSmokeTest {
 
         try {
             val failure = assertFailsWith<DaemonClientException.Timeout> {
-                client.ping(nonce = "timeout")
+                client.ping()
             }
             assertEquals(50L, failure.timeout.toMillis())
         } finally {
@@ -191,7 +190,7 @@ class DaemonClientSmokeTest {
     }
 
     private open inner class StubDaemonProcessApi : DaemonProcessApi {
-        override suspend fun ping(nonce: String): DaemonCommandResult<PingResponse> = unsupported("PING")
+        override suspend fun ping(): DaemonCommandResult<PingResponse> = unsupported("PING")
 
         override suspend fun interfaceExists(
             interfaceName: String,
