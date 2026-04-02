@@ -74,7 +74,7 @@ Use this table as the source of truth during execution.
 | 02 | Completed | 10 | 10 | 2026-03-19 | 2026-03-19 | Passed | Core contracts added, `VpnAdapter` merged into `VpnInterface`, and state simplified to live observations |
 | 03 | Completed | 14 | 14 | 2026-03-19 | 2026-03-19 | Passed | Session reconciliation finalized, engine factories wired, common packet loop (`TunPort`/`UdpPort`/ticker) implemented, and loop behavior covered by tests |
 | 04 | Completed | 16 | 16 | 2026-03-20 | 2026-03-20 | Passed | `PlatformInterfaceFactory` (`expect/actual`) added, JVM interface layer split behind daemon-only `InterfaceCommandExecutor` boundary, and packet I/O adapter `KtorDatagramUdpPort` delivered in `commonMain` with rollback/idempotency tests |
-| 05 | In progress | 12 | 6 | 2026-03-21 | - | In progress | `:new-vpn-daemon-protocol` now has typed serializable request/response models plus shared `@Rpc` contract; `:new-vpn-daemon-jvm` exposes Ktor+kRPC control-plane service; `:new-vpn-daemon-client-jvm` executes typed requests with timeout/protocol/failure mapping and smoke tests |
+| 05 | Completed | 12 | 12 | 2026-03-21 | 2026-04-02 | Passed | Typed protocol with `@Rpc` contract, kRPC daemon server scaffold, JVM client with timeout/failure mapping, simplified ping handshake, control-plane-only validation, and contract/smoke tests across all three daemon modules |
 | 06 | Not started | 16 | 0 | - | - | - | - |
 | 07 | Not started | 12 | 0 | - | - | - | - |
 | 08 | Not started | 14 | 0 | - | - | - | - |
@@ -157,6 +157,14 @@ Record architecture decisions in this file as appended entries.
 - Context: Phase 05 needed a first transport choice balancing implementation speed, typed safety, and future migration options.
 - Decision: Adopt `kotlinx-rpc` (kRPC) over Ktor WebSocket as the default local IPC transport for daemon control-plane requests, with shared `@Rpc` contracts and typed envelopes in `:new-vpn-daemon-protocol`.
 - Consequence: The daemon/client integration is delivered earlier with transport-specific logic isolated in `:new-vpn-daemon-client-jvm` and `:new-vpn-daemon-jvm`, preserving a migration path to alternative transports (UDS, remote endpoint, or gRPC) without changing core command payload models.
+
+### Decision Entry ADR-08
+
+- Decision ID: ADR-08
+- Date: 2026-04-02
+- Context: The ping/handshake endpoint carried an unused `nonce` parameter and a static `helloToken` response field that added complexity without value; a successful kRPC round-trip already proves connectivity and protocol compatibility.
+- Decision: Simplify `ping()` to a zero-argument method returning a singleton `PingResponse` object; remove `DAEMON_HELLO_TOKEN` constant and token validation from `handshake()`.
+- Consequence: Handshake is now a plain connectivity check; any future version negotiation can be added as a dedicated field without reintroducing the removed ceremony.
 
 ## Definition of Done (Program Level)
 

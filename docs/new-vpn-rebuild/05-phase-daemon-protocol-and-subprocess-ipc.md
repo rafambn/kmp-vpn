@@ -38,7 +38,7 @@ Create the communication contract between JVM process and privileged daemon usin
 - timeout handling
 - protocol mismatch validation
 - remote failure mapping
-5. Add handshake command (`PING`/`HELLO`) with protocol version check.
+5. Add handshake via zero-argument `ping()` round-trip (connectivity proof; version negotiation deferred to a dedicated field if needed).
 6. Define explicit non-goal validation:
 - packet data-plane is out of protocol scope
 - reject/avoid command types carrying raw packet payload
