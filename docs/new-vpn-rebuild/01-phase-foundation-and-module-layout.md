@@ -4,10 +4,15 @@
 
 Establish a clean project structure for a full rebuild, using `:new-vpn` as the core starting point.
 
+## Implementation Status
+
+Status: Completed  
+Date: 2026-03-19
+
 ## Inputs from Current Baseline
 
-1. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/Vpn.kt` (minimal facade)
-2. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/platform/iface/VpnInterface.kt` (merged interface/configuration contract)
+1. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/Vpn.kt` (orchestrator facade)
+2. `new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/iface/VpnInterface.kt` (merged interface/configuration contract)
 3. `new-vpn/src/commonMain/rust/lib.rs` (working tunnel bindings)
 4. `settings.gradle.kts` already includes `:new-vpn`
 
@@ -30,7 +35,7 @@ Establish a clean project structure for a full rebuild, using `:new-vpn` as the 
 - test tasks and dependency constraints
 3. Establish package roots:
 - `com.rafambn.kmpvpn.session`
-- `com.rafambn.kmpvpn.platform.iface`
+- `com.rafambn.kmpvpn.iface`
 - `com.rafambn.kmpvpn.daemon.protocol`
 - `com.rafambn.kmpvpn.daemon`
 4. Introduce architecture lint rules (manual review checklist minimum, automated rules optional).

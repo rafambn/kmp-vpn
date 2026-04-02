@@ -6,15 +6,15 @@ Implement OS interaction behind a dedicated `VpnInterface` boundary and provide 
 
 ## Implementation Status
 
-Status: Completed  
-Date: 2026-03-20
+Status: Completed (re-scoped)  
+Date: 2026-03-20 (reconciled on 2026-04-02)
 
 ## Scope
 
 1. Build interface lifecycle abstraction independent of session code.
 2. Provide JVM implementation that can run with real or stub executors.
 3. Implement merged interface+configuration semantics in `VpnInterface`.
-4. Implement platform edge adapters for common packet loop ports.
+4. Deliver concrete packet-loop edge adapters where practical, keeping remaining platform bindings behind common contracts.
 
 ## Work Breakdown
 
@@ -25,19 +25,18 @@ Date: 2026-03-20
 - apply MTU/address/routes/DNS
 - reconfigure peer configuration
 - read interface information and peer stats
-3. Define platform implementations for packet loop ports:
-- `TunPort` implementation per target platform
-- `UdpPort` implementation per target platform
-- timer/scheduler adapter compatible with common loop contracts
+3. Provide packet loop edge adapters and test doubles:
+- `KtorDatagramUdpPort` implementation for `UdpPort` in `commonMain`
+- `TunPort` and periodic ticker test doubles for deterministic loop testing
 4. Add `InterfaceCommandExecutor` boundary so daemon migration can plug in later.
 5. Implement fake in-memory interface and fake packet ports for fast `commonTest`.
-6. Map platform-specific constraints (Linux/MacOS/Windows) in dedicated adapters.
+6. Defer OS-specific command packs and concrete `TunPort` integrations to later phases.
 
 ## Deliverables
 
 1. Core `VpnInterface` contract and factory.
 2. JVM interface implementation wired to executor abstraction.
-3. Platform packet I/O adapters wired to common loop contracts.
+3. Packet I/O adapter baseline wired to common loop contracts (`KtorDatagramUdpPort` + test fakes).
 4. Tests validating idempotency and rollback behavior.
 
 ## Exit Criteria
@@ -59,7 +58,7 @@ Control: add rollback contract and tests for every create/apply step.
 1. Added `PlatformInterfaceFactory` (`expect/actual`) and `VpnPeerStats`.
 2. Added JVM interface layer:
 - `JvmVpnInterface`
-- daemon-only `InterfaceCommandExecutor` boundary (in-memory path kept only for tests)
+- `InterfaceCommandExecutor` boundary (daemon-backed executor planned; current default factory uses in-memory executor)
 3. Added JVM packet I/O adapters:
 - `KtorDatagramUdpPort` (in `commonMain`) with timeout support for non-blocking poll behavior
 4. Added reusable common test fakes (`InMemoryTunPort`, `InMemoryUdpPort`, `ManualPeriodicTicker`) and new JVM tests for idempotency, rollback, and adapter behavior.

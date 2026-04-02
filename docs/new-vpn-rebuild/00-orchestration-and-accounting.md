@@ -12,7 +12,10 @@ Build a new architecture in `:new-vpn` where:
 
 This plan assumes the current baseline in `new-vpn`:
 
-- Kotlin: minimal in-memory `Vpn` and merged `VpnInterface` configuration/lifecycle models.
+- Kotlin core: orchestrator `Vpn` lifecycle (`create/start/stop/delete/reconfigure`), observational `VpnState`, and `VpnEvent` telemetry.
+- Session runtime: `SessionManager` reconciliation, engine factories (`BORINGTUN`/`QUIC` placeholder), and common packet loop contracts/runtime (`VpnPacketLoop`, `TunPort`, `UdpPort`, periodic ticker).
+- JVM interface layer: `JvmVpnInterface` behind `InterfaceCommandExecutor`, with `PlatformInterfaceFactory.jvm` currently wiring `InMemoryInterfaceCommandExecutor`.
+- Daemon stack: shared `DaemonProcessApi` + `DaemonCommandResult`, JVM client (`DaemonProcessClient`), and daemon kRPC server scaffold (`ping` implemented; privileged commands scaffolded).
 - Rust: working `TunnelSession` UniFFI binding with packet operations.
 
 ## Target Module Topology
@@ -24,7 +27,7 @@ Purpose: typed command/request/response models shared by daemon and JVM client.
 3. `:new-vpn-daemon-jvm`
 Purpose: privileged daemon executable with strict allowlist execution for OS commands only.
 4. `:new-vpn-daemon-client-jvm` (optional; can stay in `:new-vpn` jvmMain initially)
-Purpose: kRPC client used by JVM `VpnInterface` implementation, defaulting to local loopback transport.
+Purpose: kRPC client for daemon control-plane requests; currently not yet wired into `:new-vpn` default JVM factory.
 
 ## Phase Map
 
@@ -73,10 +76,10 @@ Use this table as the source of truth during execution.
 | 01 | Completed | 8 | 8 | 2026-03-19 | 2026-03-19 | Passed | Module scaffolding, architecture checks, and CI entry tasks added |
 | 02 | Completed | 10 | 10 | 2026-03-19 | 2026-03-19 | Passed | Core contracts added, `VpnAdapter` merged into `VpnInterface`, and state simplified to live observations |
 | 03 | Completed | 14 | 14 | 2026-03-19 | 2026-03-19 | Passed | Session reconciliation finalized, engine factories wired, common packet loop (`TunPort`/`UdpPort`/ticker) implemented, and loop behavior covered by tests |
-| 04 | Completed | 16 | 16 | 2026-03-20 | 2026-03-20 | Passed | `PlatformInterfaceFactory` (`expect/actual`) added, JVM interface layer split behind daemon-only `InterfaceCommandExecutor` boundary, and packet I/O adapter `KtorDatagramUdpPort` delivered in `commonMain` with rollback/idempotency tests |
-| 05 | Completed | 12 | 12 | 2026-03-21 | 2026-04-02 | Passed | Typed protocol with `@Rpc` contract, kRPC daemon server scaffold, JVM client with timeout/failure mapping, simplified ping handshake, control-plane-only validation, and contract/smoke tests across all three daemon modules |
-| 06 | Not started | 16 | 0 | - | - | - | - |
-| 07 | Not started | 12 | 0 | - | - | - | - |
+| 04 | Completed | 16 | 16 | 2026-03-20 | 2026-03-20 | Passed | `PlatformInterfaceFactory` (`expect/actual`) and `JvmVpnInterface` delivered behind `InterfaceCommandExecutor`; default JVM factory currently uses `InMemoryInterfaceCommandExecutor`; `KtorDatagramUdpPort` and rollback/idempotency tests delivered |
+| 05 | Completed | 12 | 12 | 2026-03-21 | 2026-04-02 | Passed | `DaemonProcessApi` (`@Rpc`) + `DaemonCommandResult` protocol, kRPC `/services` daemon scaffold, JVM client with timeout + handshake checks, simplified ping contract, and smoke/contract tests across protocol/client/daemon modules |
+| 06 | Not started | 16 | 0 | - | - | - | Daemon executable is scaffold-only today (`ping` success; privileged command methods currently return `UNKNOWN_COMMAND`) |
+| 07 | Re-scoped (partial) | 12 | 0 | - | - | - | Core orchestration semantics are already present in `Vpn`; remaining work is daemon-backed executor wiring and final packet-loop ownership/cutover decisions |
 | 08 | Not started | 14 | 0 | - | - | - | - |
 | 09 | Not started | 8 | 0 | - | - | - | - |
 
@@ -148,15 +151,15 @@ Record architecture decisions in this file as appended entries.
 - Date: 2026-03-20
 - Context: Phase 04 requires JVM interface operations now, but daemon IPC will only be introduced in phase 05.
 - Decision: Introduce `InterfaceCommandExecutor` as the only command boundary consumed by `JvmVpnInterface`; forbid local OS command execution in `:new-vpn` JVM code and reserve privileged command execution for daemon-backed executors only.
-- Consequence: Phase 05 plugs daemon IPC implementations into `InterfaceCommandExecutor` without changing `Vpn`, `SessionManager`, or `VpnInterface` contracts.
+- Consequence: Phase 05 can deliver daemon protocol/client/server scaffolds without changing `Vpn`, `SessionManager`, or `VpnInterface` contracts; default factory wiring to daemon-backed executors remains a later cutover step.
 
 ### Decision Entry ADR-07
 
 - Decision ID: ADR-07
 - Date: 2026-03-21
 - Context: Phase 05 needed a first transport choice balancing implementation speed, typed safety, and future migration options.
-- Decision: Adopt `kotlinx-rpc` (kRPC) over Ktor WebSocket as the default local IPC transport for daemon control-plane requests, with shared `@Rpc` contracts and typed envelopes in `:new-vpn-daemon-protocol`.
-- Consequence: The daemon/client integration is delivered earlier with transport-specific logic isolated in `:new-vpn-daemon-client-jvm` and `:new-vpn-daemon-jvm`, preserving a migration path to alternative transports (UDS, remote endpoint, or gRPC) without changing core command payload models.
+- Decision: Adopt `kotlinx-rpc` (kRPC) over Ktor WebSocket transport (`/services`) for daemon control-plane requests, with shared `@Rpc` contract (`DaemonProcessApi`) and typed results (`DaemonCommandResult`) in `:new-vpn-daemon-protocol`.
+- Consequence: The daemon/client integration is delivered early with transport-specific logic isolated in `:new-vpn-daemon-client-jvm` and `:new-vpn-daemon-jvm`, preserving a migration path to alternative transports (UDS, remote endpoint, or gRPC) without changing core command payload models.
 
 ### Decision Entry ADR-08
 
@@ -166,6 +169,14 @@ Record architecture decisions in this file as appended entries.
 - Decision: Simplify `ping()` to a zero-argument method returning a singleton `PingResponse` object; remove `DAEMON_HELLO_TOKEN` constant and token validation from `handshake()`.
 - Consequence: Handshake is now a plain connectivity check; any future version negotiation can be added as a dedicated field without reintroducing the removed ceremony.
 
+### Decision Entry ADR-09
+
+- Decision ID: ADR-09
+- Date: 2026-04-02
+- Context: Phase 05 delivered standalone daemon protocol/client/server scaffolding, but privileged command execution is not yet implemented in the daemon.
+- Decision: Keep `PlatformInterfaceFactory.jvm` wired to `InMemoryInterfaceCommandExecutor` until phase 06 allowlisted command execution is implemented and phase 07/09 cutover is ready.
+- Consequence: Core orchestration tests remain deterministic and decoupled from daemon lifecycle, while program-level DoD items requiring daemon-only privileged execution remain open.
+
 ## Definition of Done (Program Level)
 
 1. `Vpn` orchestrates `SessionManager` and `VpnInterface` only.
@@ -174,3 +185,5 @@ Record architecture decisions in this file as appended entries.
 4. No generic command execution path exists.
 5. Core module can be tested with fake interface/session dependencies.
 6. End-to-end lifecycle tests pass: `create`, `start`, `stop`, `delete`, peer updates, failure rollback.
+
+Current gap snapshot (2026-04-02): items 3 and 4 are still pending phase 06/09 completion.
