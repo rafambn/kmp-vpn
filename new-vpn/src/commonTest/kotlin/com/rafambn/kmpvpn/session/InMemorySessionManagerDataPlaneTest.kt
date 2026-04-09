@@ -264,7 +264,7 @@ class InMemorySessionManagerDataPlaneTest {
         private val tun: TunPort,
         private var configuration: VpnConfiguration,
     ) : VpnInterface {
-        override fun exists(interfaceName: String): Boolean = true
+        override fun exists(): Boolean = true
 
         override fun create(config: VpnConfiguration) = Unit
 

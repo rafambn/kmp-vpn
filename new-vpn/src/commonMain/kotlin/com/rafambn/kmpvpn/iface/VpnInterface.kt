@@ -13,7 +13,7 @@ interface VpnInterface {
     /**
      * Checks whether an interface with the provided name exists.
      */
-    fun exists(interfaceName: String): Boolean
+    fun exists(): Boolean
 
     /**
      * Creates the interface with the provided base configuration.

@@ -22,13 +22,13 @@ class VpnStateTransitionTest {
         assertEquals(VpnState.NotCreated, vpn.state())
 
         vpn.create()
-        assertEquals(VpnState.Created("wg0"), vpn.state())
+        assertEquals(VpnState.Created, vpn.state())
 
         vpn.start()
-        assertEquals(VpnState.Running("wg0"), vpn.state())
+        assertEquals(VpnState.Running, vpn.state())
 
         vpn.stop()
-        assertEquals(VpnState.Created("wg0"), vpn.state())
+        assertEquals(VpnState.Created, vpn.state())
 
         vpn.delete()
         assertEquals(VpnState.NotCreated, vpn.state())
@@ -61,7 +61,7 @@ class VpnStateTransitionTest {
             vpn.start()
         }
 
-        assertEquals(VpnState.Created("wg2"), vpn.state())
+        assertEquals(VpnState.Created, vpn.state())
         assertTrue(emittedEvents.any { event -> event is VpnEvent.Failure })
     }
 
@@ -78,7 +78,7 @@ class VpnStateTransitionTest {
         private var created: Boolean = false
         private var currentConfiguration: VpnConfiguration? = null
 
-        override fun exists(interfaceName: String): Boolean = created
+        override fun exists(): Boolean = created
 
         override fun create(config: VpnConfiguration) {
             created = true

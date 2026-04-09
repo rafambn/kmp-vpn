@@ -9,3 +9,6 @@ DOCUMENTATION FILES - FORMAT RULES
 - Start with FILE: path to the file
 - End with what to review next
 - Explain the "why" not the "what"
+- Organize content into two groups: REVIEWED and NEW
+- REVIEWED - items user agreed with and approved, do not modify unless explicitly told
+- NEW - items created by the agent, can be modified or removed based on feedback

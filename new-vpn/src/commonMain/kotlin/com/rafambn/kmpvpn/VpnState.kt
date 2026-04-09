@@ -16,10 +16,10 @@ sealed class VpnState {
     /**
      * Interface exists and is configured, but not running.
      */
-    data class Created(val interfaceName: String) : VpnState()
+    data object Created : VpnState()
 
     /**
      * Interface exists and has active sessions while being up.
      */
-    data class Running(val interfaceName: String) : VpnState()
+    data object Running : VpnState()
 }

@@ -23,12 +23,11 @@ class Vpn internal constructor(
         engine: Engine = Engine.BORINGTUN,
         vpnConfiguration: VpnConfiguration,
         onEvent: ((VpnEvent) -> Unit)? = null,
-        vpnInterfaceFactory: (VpnConfiguration) -> VpnInterface = PlatformInterfaceFactory::create,
     ) : this(
         vpnConfiguration = vpnConfiguration,
         onEvent = onEvent,
         sessionManager = InMemorySessionManager(engine = engine),
-        vpnInterface = vpnInterfaceFactory(vpnConfiguration),
+        vpnInterface = PlatformInterfaceFactory.create(vpnConfiguration),
     )
 
     init {
@@ -44,9 +43,9 @@ class Vpn internal constructor(
         }
 
         return if (isRunning()) {
-            VpnState.Running(vpnConfiguration.interfaceName)
+            VpnState.Running
         } else {
-            VpnState.Created(vpnConfiguration.interfaceName)
+            VpnState.Created
         }
     }
 
@@ -54,7 +53,7 @@ class Vpn internal constructor(
      * Returns whether the VPN interface currently exists.
      */
     fun exists(): Boolean {
-        return vpnInterface.exists(vpnConfiguration.interfaceName)
+        return vpnInterface.exists()
     }
 
     /**

@@ -13,64 +13,54 @@ import com.rafambn.kmpvpn.session.io.TunPort
  * privileged [InterfaceCommandExecutor] operations.
  */
 class JvmVpnInterface(
+    private val interfaceName: String,
     private val commandExecutor: InterfaceCommandExecutor,
     private val tunProvider: TunProvider,
 ) : VpnInterface {
-    private var createdInterfaceName: String? = null
     private var currentConfiguration: VpnConfiguration? = null
     private var currentTunPort: OwnedTunPort? = null
     private var up: Boolean = false
 
-    override fun exists(interfaceName: String): Boolean {
-        val providerExists = tunProvider.exists(interfaceName)
-        val observedExists = providerExists || commandExecutor.interfaceExists(interfaceName)
-
-        if (createdInterfaceName == interfaceName) {
-            if (!observedExists) {
-                clearState(closeTunPort = true)
-            }
-            return observedExists
+    override fun exists(): Boolean {
+        val observedExists = commandExecutor.interfaceExists(interfaceName)
+        if (!observedExists) {
+            clearState(closeTunPort = true)
         }
         return observedExists
     }
 
     override fun create(config: VpnConfiguration) {
         requireValidConfiguration(config)
-
-        if (createdInterfaceName != null && createdInterfaceName != config.interfaceName) {
-            throw IllegalStateException(
-                "Cannot create `${config.interfaceName}` while `${createdInterfaceName ?: "unknown"}` is active",
-            )
+        require(config.interfaceName == interfaceName) {
+            "Cannot create interface `${config.interfaceName}` on a manager for `$interfaceName`"
         }
 
-        if (createdInterfaceName == config.interfaceName && currentTunPort != null) {
+        if (currentTunPort != null) {
             if (currentConfiguration == null) currentConfiguration = snapshot(config)
             return
         }
 
         val tunPort = try {
-            tunProvider.open(config.interfaceName)
+            tunProvider.open(interfaceName)
         } catch (throwable: Throwable) {
             throw IllegalStateException(
-                "Failed to open tun interface `${config.interfaceName}`: ${throwable.message ?: "unknown"}",
+                "Failed to open tun interface `$interfaceName`: ${throwable.message ?: "unknown"}",
                 throwable,
             )
         }
 
         try {
             currentTunPort = tunPort
-            createdInterfaceName = tunPort.interfaceName
             applyConfiguration(config)
         } catch (throwable: Throwable) {
             safeRun { tunPort.close() }
             clearState(closeTunPort = false)
             throw IllegalStateException(
-                "Failed to create interface `${config.interfaceName}`: ${throwable.message ?: "unknown"}",
+                "Failed to create interface `$interfaceName`: ${throwable.message ?: "unknown"}",
                 throwable,
             )
         }
 
-        createdInterfaceName = tunPort.interfaceName
         currentConfiguration = snapshot(config)
         up = false
     }
@@ -86,7 +76,9 @@ class JvmVpnInterface(
     }
 
     override fun down() {
-        val interfaceName = createdInterfaceName ?: return
+        if (currentTunPort == null) {
+            return
+        }
         if (!up) {
             return
         }
@@ -96,7 +88,9 @@ class JvmVpnInterface(
     }
 
     override fun delete() {
-        val interfaceName = createdInterfaceName ?: return
+        if (currentTunPort == null) {
+            return
+        }
 
         if (up) {
             safeRun { commandExecutor.setInterfaceUp(interfaceName, false) }
@@ -106,7 +100,9 @@ class JvmVpnInterface(
     }
 
     override fun isUp(): Boolean {
-        val interfaceName = createdInterfaceName ?: return false
+        if (currentTunPort == null) {
+            return false
+        }
         val observed = commandExecutor.readInformation(interfaceName)?.isUp
         if (observed != null) {
             up = observed
@@ -236,8 +232,10 @@ class JvmVpnInterface(
     }
 
     private fun requireCreatedInterface(): String {
-        return createdInterfaceName
-            ?: throw IllegalStateException("Interface was not created")
+        if (currentTunPort == null) {
+            throw IllegalStateException("Interface `$interfaceName` was not created")
+        }
+        return interfaceName
     }
 
     private fun defaultPeerStats(adapter: VpnAdapterConfiguration): List<VpnPeerStats> {
@@ -303,7 +301,6 @@ class JvmVpnInterface(
             safeRun { currentTunPort?.close() }
         }
         currentTunPort = null
-        createdInterfaceName = null
         currentConfiguration = null
         up = false
     }

@@ -1,0 +1,30 @@
+FILE: new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/Vpn.kt
+
+REVIEWED
+- Public constructor should expose only engine, config, and onEvent - hides vpnInterfaceFactory to simplify user API and enforce dependency injection through factory defaults
+- state() returns the VPN lifecycle status by checking existence then runtime state - distinguishes between NotCreated, Created (exists but down), and Running (active tunnels)
+- exists() on JVM should check if interface actually exists on the OS - ensures accurate lifecycle state reporting across platforms
+
+NEW
+- isRunning() checks both interface existence and active sessions - clarifies that running requires both conditions
+- create() wraps exceptions and publishes events - ensures all failures are observable and throwable
+- start() calls create() first - guarantees interface exists before attempting to bring it up
+- start() checks isRunning() before proceeding - prevents attempting to start already running interfaces
+- start() reconciles sessions after reconfiguration - ensures peer configuration matches runtime state
+- start() recovers gracefully on up() failure - cleans up sessions and calls down() to leave clean state
+- stop() is idempotent - can be called safely multiple times without side effects
+- delete() handles both up and not-up cases - session cleanup happens before bringing down the interface
+- delete() skips redundant cleanup - tracks sessionsClosed to avoid calling closeAll() twice
+- configuration() throws on failure - ensures caller knows when configuration state is uncertain
+- information() returns null when interface doesn't exist - distinguishes between "interface not found" and "read failed"
+- information() merges runtime peer stats - provides current tunnel statistics alongside static configuration
+- reconfigure() validates interface name matches - prevents accidental misconfiguration of wrong interfaces
+- reconfigure() reconciles sessions after change - ensures new configuration is reflected in active sessions
+- reconfigure() restarts runtime if interface is up - maintains active tunnels after configuration change
+- safeCloseSessions() catches all exceptions - ensures cleanup never fails even if sessions are corrupted
+- safeRun() wraps best-effort operations - used for rollback cleanup where failure is not fatal
+- handleRuntimeFailure() publishes failure events - gives callers visibility into tunnel runtime errors
+- publishEvent() checks onEvent existence - prevents null pointer when event handler is not provided
+- AutoCloseable implementation delegates to delete() - integrates with try-with-resources for proper cleanup
+
+Review next: SessionManager implementation to understand session lifecycle and reconciliation

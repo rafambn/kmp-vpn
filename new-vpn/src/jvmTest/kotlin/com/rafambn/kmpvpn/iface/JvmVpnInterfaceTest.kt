@@ -16,6 +16,7 @@ class JvmVpnInterfaceTest {
         val executor = InMemoryInterfaceCommandExecutor()
         val tunProvider = InMemoryTunProvider()
         val vpnInterface = JvmVpnInterface(
+            interfaceName = "wg0",
             commandExecutor = executor,
             tunProvider = tunProvider,
         )
@@ -39,7 +40,7 @@ class JvmVpnInterfaceTest {
         assertEquals(1, executor.callLog.count { call -> call == "setInterfaceUp:wg0:false" })
         assertEquals(1, tunProvider.callLog.count { call -> call == "openTun:wg0" })
         assertEquals(1, tunProvider.callLog.count { call -> call == "closeTun:wg0" })
-        assertFalse(vpnInterface.exists("wg0"))
+        assertFalse(vpnInterface.exists())
     }
 
     @Test
@@ -48,6 +49,7 @@ class JvmVpnInterfaceTest {
         val tunProvider = InMemoryTunProvider()
         val executor = FailureInjectingExecutor(delegate)
         val vpnInterface = JvmVpnInterface(
+            interfaceName = "wg1",
             commandExecutor = executor,
             tunProvider = tunProvider,
         )
@@ -90,6 +92,7 @@ class JvmVpnInterfaceTest {
     fun readInformationIncludesExecutorPeerStats() {
         val executor = InMemoryInterfaceCommandExecutor()
         val vpnInterface = JvmVpnInterface(
+            interfaceName = "wg2",
             commandExecutor = executor,
             tunProvider = InMemoryTunProvider(),
         )

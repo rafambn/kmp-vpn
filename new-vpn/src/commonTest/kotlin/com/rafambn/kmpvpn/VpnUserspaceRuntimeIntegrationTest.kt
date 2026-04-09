@@ -31,11 +31,11 @@ class VpnUserspaceRuntimeIntegrationTest {
         vpn.start()
         assertEquals(1, runtimeFactory.handles.size)
         assertTrue(runtimeFactory.handles.single().isRunning())
-        assertEquals(VpnState.Running("wg-runtime"), vpn.state())
+        assertEquals(VpnState.Running, vpn.state())
 
         vpn.stop()
         assertFalse(runtimeFactory.handles.single().isRunning())
-        assertEquals(VpnState.Created("wg-runtime"), vpn.state())
+        assertEquals(VpnState.Created, vpn.state())
 
         vpn.start()
         assertEquals(2, runtimeFactory.handles.size)
@@ -67,7 +67,7 @@ class VpnUserspaceRuntimeIntegrationTest {
         assertTrue(failure.message.orEmpty().contains("Session operation `startRuntime` failed"))
         assertEquals(1, vpnInterface.downCalls)
         assertEquals(0, sessionManager.sessions().size)
-        assertEquals(VpnState.Created("wg-fail"), vpn.state())
+        assertEquals(VpnState.Created, vpn.state())
         assertTrue(emittedEvents.any { event -> event is VpnEvent.Failure })
     }
 
@@ -198,7 +198,7 @@ class VpnUserspaceRuntimeIntegrationTest {
         private val tun = InMemoryTunPort()
         var downCalls: Int = 0
 
-        override fun exists(interfaceName: String): Boolean = created
+        override fun exists(): Boolean = created
 
         override fun create(config: VpnConfiguration) {
             created = true
