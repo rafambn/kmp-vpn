@@ -31,7 +31,6 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-include(":kmp-vpn")
 include(":new-vpn")
 include(":new-vpn-daemon-protocol")
 include(":new-vpn-daemon-jvm")
