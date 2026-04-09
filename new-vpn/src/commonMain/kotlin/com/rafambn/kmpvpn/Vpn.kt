@@ -2,6 +2,7 @@ package com.rafambn.kmpvpn
 
 import com.rafambn.kmpvpn.iface.PlatformInterfaceFactory
 import com.rafambn.kmpvpn.iface.VpnInterface
+import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
 import com.rafambn.kmpvpn.session.InMemorySessionManager
 import com.rafambn.kmpvpn.session.SessionManager
 
@@ -75,9 +76,7 @@ class Vpn internal constructor(
      */
     fun create(): VpnInterface {
         try {
-            if (!exists()) {
-                vpnInterface.create(vpnConfiguration)
-            }
+            vpnInterface.create(vpnConfiguration)
         } catch (throwable: Throwable) {
             val description = "Interface operation `create` failed: ${throwable.message ?: "unknown"}"
             publishEvent(VpnEvent.Failure(description))
@@ -134,7 +133,22 @@ class Vpn internal constructor(
         try {
             managedInterface.up()
         } catch (throwable: Throwable) {
+            safeCloseSessions()
             val description = "Interface operation `up` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        try {
+            sessionManager.startRuntime(
+                configuration = currentConfiguration,
+                vpnInterface = managedInterface,
+                onFailure = ::handleRuntimeFailure,
+            )
+        } catch (throwable: Throwable) {
+            safeRun { managedInterface.down() }
+            safeCloseSessions()
+            val description = "Session operation `startRuntime` failed: ${throwable.message ?: "unknown"}"
             publishEvent(VpnEvent.Failure(description))
             throw IllegalStateException(description, throwable)
         }
@@ -147,6 +161,7 @@ class Vpn internal constructor(
      */
     fun stop() {
         if (!exists()) {
+            safeCloseSessions()
             return
         }
 
@@ -172,6 +187,7 @@ class Vpn internal constructor(
      */
     fun delete() {
         if (!exists()) {
+            safeCloseSessions()
             return
         }
 
@@ -228,6 +244,30 @@ class Vpn internal constructor(
     }
 
     /**
+     * Returns current live interface information, or `null` if the interface does not exist.
+     */
+    fun information(): VpnInterfaceInformation? {
+        if (!exists()) {
+            return null
+        }
+
+        val baseInformation = try {
+            vpnInterface.readInformation()
+        } catch (throwable: Throwable) {
+            val description = "Interface operation `readInformation` failed: ${throwable.message ?: "unknown"}"
+            publishEvent(VpnEvent.Failure(description))
+            throw IllegalStateException(description, throwable)
+        }
+
+        val runtimePeerStats = sessionManager.peerStats()
+        return if (runtimePeerStats.isEmpty()) {
+            baseInformation
+        } else {
+            baseInformation.copy(peerStats = runtimePeerStats)
+        }
+    }
+
+    /**
      * Replaces current interface configuration and reconciles sessions.
      */
     fun reconfigure(config: VpnConfiguration) {
@@ -251,6 +291,20 @@ class Vpn internal constructor(
             publishEvent(VpnEvent.Failure(description))
             throw IllegalStateException(description, throwable)
         }
+
+        if (vpnInterface.isUp()) {
+            try {
+                sessionManager.startRuntime(
+                    configuration = vpnInterface.configuration(),
+                    vpnInterface = vpnInterface,
+                    onFailure = ::handleRuntimeFailure,
+                )
+            } catch (throwable: Throwable) {
+                val description = "Session operation `startRuntime` failed: ${throwable.message ?: "unknown"}"
+                publishEvent(VpnEvent.Failure(description))
+                throw IllegalStateException(description, throwable)
+            }
+        }
     }
 
     override fun close() {
@@ -259,6 +313,27 @@ class Vpn internal constructor(
 
     private fun publishEvent(event: VpnEvent) {
         onEvent?.invoke(event)
+    }
+
+    private fun safeCloseSessions() {
+        try {
+            sessionManager.closeAll()
+        } catch (_: Throwable) {
+            // best-effort rollback and cleanup
+        }
+    }
+
+    private fun safeRun(block: () -> Unit) {
+        try {
+            block()
+        } catch (_: Throwable) {
+            // best-effort rollback and cleanup
+        }
+    }
+
+    private fun handleRuntimeFailure(throwable: Throwable) {
+        val description = "Session runtime failed: ${throwable.message ?: "unknown"}"
+        publishEvent(VpnEvent.Failure(description))
     }
 
     companion object {

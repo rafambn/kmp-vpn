@@ -9,16 +9,17 @@ internal object DaemonPayloadValidator {
     private const val MAX_DNS_SERVERS = 64
     private const val MAX_ADDRESSES = 64
     private const val MAX_ROUTES = 256
+    private const val MAX_INTERFACE_NAME_LENGTH = 32
     private const val MAX_ENDPOINT_LENGTH = 253
     private const val MAX_CIDR_LENGTH = 64
     private const val MAX_DOMAIN_LENGTH = 253
     private val MTU_RANGE: IntRange = MIN_MTU..MAX_MTU
-    private val INTERFACE_NAME_REGEX = Regex("^utun(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$")
+    private val INTERFACE_NAME_REGEX = Regex("^[A-Za-z][A-Za-z0-9_.-]{0,31}$")
     private val HOSTNAME_REGEX =
         Regex("^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 
     fun validateInterfaceName(interfaceName: String) {
-        if (!INTERFACE_NAME_REGEX.matches(interfaceName)) {
+        if (interfaceName.length > MAX_INTERFACE_NAME_LENGTH || !INTERFACE_NAME_REGEX.matches(interfaceName)) {
             throw PayloadValidationException("Interface name must match `${INTERFACE_NAME_REGEX.pattern}`.")
         }
     }

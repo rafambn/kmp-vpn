@@ -1,9 +1,15 @@
 package com.rafambn.kmpvpn.session
 
+import com.rafambn.kmpvpn.DefaultVpnConfiguration
+import com.rafambn.kmpvpn.VpnConfiguration
 import com.rafambn.kmpvpn.VpnPeer
+import com.rafambn.kmpvpn.iface.VpnInterface
+import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
+import com.rafambn.kmpvpn.session.factory.VpnSessionFactory
 import com.rafambn.kmpvpn.session.io.InMemoryTunPort
 import com.rafambn.kmpvpn.session.io.InMemoryUdpPort
 import com.rafambn.kmpvpn.session.io.ManualPeriodicTicker
+import com.rafambn.kmpvpn.session.io.TunPort
 import com.rafambn.kmpvpn.session.io.UdpDatagram
 import com.rafambn.kmpvpn.session.io.UdpEndpoint
 import com.rafambn.kmpvpn.session.io.VpnPacketResult
@@ -13,7 +19,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class UserspaceVpnRuntimeTest {
+class InMemorySessionManagerDataPlaneTest {
 
     @Test
     fun longestPrefixMatchRoutesTunPacketsToTheCorrectPeer() = runTest {
@@ -25,21 +31,20 @@ class UserspaceVpnRuntimeTest {
             peerPublicKey = "peer-b",
             encryptResults = ArrayDeque(listOf(VpnPacketResult.WriteToNetwork(byteArrayOf(2)))),
         )
-        val manager = FakeSessionManager(
-            managed = listOf(
-                managedSession(
+        val manager = manager(peerA, peerB)
+        val configuration = configuration(
+            peers = listOf(
+                peer(
                     publicKey = "peer-a",
                     allowedIps = listOf("10.0.0.0/8"),
                     endpointHost = "198.51.100.1",
                     endpointPort = 51820,
-                    session = peerA,
                 ),
-                managedSession(
+                peer(
                     publicKey = "peer-b",
                     allowedIps = listOf("10.1.2.0/24"),
                     endpointHost = "198.51.100.2",
                     endpointPort = 51821,
-                    session = peerB,
                 ),
             ),
         )
@@ -48,11 +53,9 @@ class UserspaceVpnRuntimeTest {
         )
         val udpPort = InMemoryUdpPort()
 
-        UserspaceVpnRuntime(
-            sessionManager = manager,
-            tunPort = tunPort,
-            udpPort = udpPort,
-        ).pollOnce()
+        manager.reconcileSessions(configuration.adapter)
+        manager.startRuntime(configuration, TunOnlyVpnInterface(tunPort, configuration))
+        manager.pollRuntimeOnce(udpPort) { false }
 
         assertEquals(1, udpPort.sentDatagrams.size)
         assertEquals(UdpEndpoint("198.51.100.2", 51821), udpPort.sentDatagrams.single().endpoint)
@@ -63,14 +66,16 @@ class UserspaceVpnRuntimeTest {
 
     @Test
     fun unknownDestinationPacketsAreDropped() = runTest {
-        val manager = FakeSessionManager(
-            managed = listOf(
-                managedSession(
+        val manager = manager(
+            QueueVpnSession(peerPublicKey = "peer-a"),
+        )
+        val configuration = configuration(
+            peers = listOf(
+                peer(
                     publicKey = "peer-a",
                     allowedIps = listOf("10.0.0.0/24"),
                     endpointHost = "198.51.100.1",
                     endpointPort = 51820,
-                    session = QueueVpnSession(peerPublicKey = "peer-a"),
                 ),
             ),
         )
@@ -79,13 +84,12 @@ class UserspaceVpnRuntimeTest {
         )
         val udpPort = InMemoryUdpPort()
 
-        UserspaceVpnRuntime(
-            sessionManager = manager,
-            tunPort = tunPort,
-            udpPort = udpPort,
-        ).pollOnce()
+        manager.reconcileSessions(configuration.adapter)
+        manager.startRuntime(configuration, TunOnlyVpnInterface(tunPort, configuration))
+        manager.pollRuntimeOnce(udpPort) { false }
 
         assertTrue(udpPort.sentDatagrams.isEmpty())
+        assertEquals(0L, manager.peerStats().single().transmittedBytes)
     }
 
     @Test
@@ -98,21 +102,20 @@ class UserspaceVpnRuntimeTest {
             peerPublicKey = "peer-b",
             decryptResults = ArrayDeque(listOf(VpnPacketResult.WriteToTunnelIpv4(byteArrayOf(9, 9, 9)), VpnPacketResult.Done)),
         )
-        val manager = FakeSessionManager(
-            managed = listOf(
-                managedSession(
+        val manager = manager(peerA, peerB)
+        val configuration = configuration(
+            peers = listOf(
+                peer(
                     publicKey = "peer-a",
                     allowedIps = listOf("10.0.0.0/24"),
                     endpointHost = "198.51.100.1",
                     endpointPort = 51820,
-                    session = peerA,
                 ),
-                managedSession(
+                peer(
                     publicKey = "peer-b",
                     allowedIps = listOf("10.1.0.0/24"),
                     endpointHost = "198.51.100.2",
                     endpointPort = 51821,
-                    session = peerB,
                 ),
             ),
         )
@@ -128,19 +131,15 @@ class UserspaceVpnRuntimeTest {
             ),
         )
 
-        val runtime = UserspaceVpnRuntime(
-            sessionManager = manager,
-            tunPort = tunPort,
-            udpPort = udpPort,
-        )
-
-        runtime.pollOnce()
+        manager.reconcileSessions(configuration.adapter)
+        manager.startRuntime(configuration, TunOnlyVpnInterface(tunPort, configuration))
+        manager.pollRuntimeOnce(udpPort) { false }
 
         assertEquals(0, peerA.decryptInputs.size)
         assertEquals(2, peerB.decryptInputs.size)
         assertContentEquals(byteArrayOf(7, 8, 9), peerB.decryptInputs.first())
         assertEquals(1, tunPort.writtenPackets.size)
-        assertEquals(3L, runtime.peerStats().single { it.publicKey == "peer-b" }.receivedBytes)
+        assertEquals(3L, manager.peerStats().single { it.publicKey == "peer-b" }.receivedBytes)
     }
 
     @Test
@@ -153,56 +152,70 @@ class UserspaceVpnRuntimeTest {
             peerPublicKey = "peer-b",
             periodicResults = ArrayDeque(listOf(VpnPacketResult.WriteToNetwork(byteArrayOf(2)))),
         )
-        val manager = FakeSessionManager(
-            managed = listOf(
-                managedSession(
+        val manager = manager(peerA, peerB)
+        val configuration = configuration(
+            peers = listOf(
+                peer(
                     publicKey = "peer-a",
                     allowedIps = listOf("10.0.0.0/24"),
                     endpointHost = "198.51.100.1",
                     endpointPort = 51820,
-                    session = peerA,
                 ),
-                managedSession(
+                peer(
                     publicKey = "peer-b",
                     allowedIps = listOf("10.1.0.0/24"),
                     endpointHost = "198.51.100.2",
                     endpointPort = 51821,
-                    session = peerB,
                 ),
             ),
         )
         val udpPort = InMemoryUdpPort()
-        val runtime = UserspaceVpnRuntime(
-            sessionManager = manager,
-            tunPort = InMemoryTunPort(),
+
+        manager.reconcileSessions(configuration.adapter)
+        manager.startRuntime(configuration, TunOnlyVpnInterface(InMemoryTunPort(), configuration))
+        manager.pollRuntimeOnce(
             udpPort = udpPort,
             periodicTicker = ManualPeriodicTicker(values = ArrayDeque(listOf(true))),
         )
 
-        runtime.pollOnce()
-
         assertEquals(1, peerA.periodicCalls)
         assertEquals(1, peerB.periodicCalls)
         assertEquals(2, udpPort.sentDatagrams.size)
-        assertEquals(1L, runtime.peerStats().single { it.publicKey == "peer-a" }.transmittedBytes)
-        assertEquals(1L, runtime.peerStats().single { it.publicKey == "peer-b" }.transmittedBytes)
+        assertEquals(1L, manager.peerStats().single { it.publicKey == "peer-a" }.transmittedBytes)
+        assertEquals(1L, manager.peerStats().single { it.publicKey == "peer-b" }.transmittedBytes)
     }
 
-    private fun managedSession(
+    private fun manager(vararg sessions: QueueVpnSession): InMemorySessionManager {
+        return InMemorySessionManager(
+            sessionFactory = RecordingSessionFactory(sessions.associateBy { session -> session.peerPublicKey }),
+            userspaceRuntimeFactory = { _, _, _, _, _ -> null },
+        )
+    }
+
+    private fun configuration(
+        peers: List<VpnPeer>,
+        listenPort: Int = 51820,
+    ): VpnConfiguration {
+        return DefaultVpnConfiguration(
+            interfaceName = "wg-test",
+            listenPort = listenPort,
+            privateKey = "private-key",
+            publicKey = "public-key",
+            peers = peers,
+        )
+    }
+
+    private fun peer(
         publicKey: String,
         allowedIps: List<String>,
         endpointHost: String,
         endpointPort: Int,
-        session: VpnSession,
-    ): ManagedSession {
-        return ManagedSession(
-            peer = VpnPeer(
-                publicKey = publicKey,
-                allowedIps = allowedIps,
-                endpointAddress = endpointHost,
-                endpointPort = endpointPort,
-            ),
-            session = session,
+    ): VpnPeer {
+        return VpnPeer(
+            publicKey = publicKey,
+            allowedIps = allowedIps,
+            endpointAddress = endpointHost,
+            endpointPort = endpointPort,
         )
     }
 
@@ -231,20 +244,49 @@ class UserspaceVpnRuntimeTest {
         )
     }
 
-    private class FakeSessionManager(
-        private val managed: List<ManagedSession>,
-    ) : SessionManager {
-        override fun reconcileSessions(config: com.rafambn.kmpvpn.VpnAdapterConfiguration) = Unit
+    private class RecordingSessionFactory(
+        private val sessionsByKey: Map<String, QueueVpnSession>,
+    ) : VpnSessionFactory {
+        override fun create(
+            config: com.rafambn.kmpvpn.VpnAdapterConfiguration,
+            peer: VpnPeer,
+            sessionIndex: UInt,
+        ): VpnSession {
+            val session = checkNotNull(sessionsByKey[peer.publicKey]) {
+                "Missing test session for `${peer.publicKey}`"
+            }
+            session.sessionIndex = sessionIndex
+            return session
+        }
+    }
 
-        override fun sessions(): List<SessionSnapshot> = emptyList()
+    private class TunOnlyVpnInterface(
+        private val tun: TunPort,
+        private var configuration: VpnConfiguration,
+    ) : VpnInterface {
+        override fun exists(interfaceName: String): Boolean = true
 
-        override fun managedSessions(): List<ManagedSession> = managed
+        override fun create(config: VpnConfiguration) = Unit
 
-        override fun session(peerKey: String): SessionSnapshot? = null
+        override fun up() = Unit
 
-        override fun closeSession(peerKey: String) = Unit
+        override fun down() = Unit
 
-        override fun closeAll() = Unit
+        override fun delete() = Unit
+
+        override fun isUp(): Boolean = true
+
+        override fun configuration(): VpnConfiguration = configuration
+
+        override fun tunPort(): TunPort = tun
+
+        override fun reconfigure(config: VpnConfiguration) {
+            configuration = config
+        }
+
+        override fun readInformation(): VpnInterfaceInformation {
+            throw UnsupportedOperationException("readInformation is not used in data-plane tests")
+        }
     }
 
     private class QueueVpnSession(
@@ -253,7 +295,7 @@ class UserspaceVpnRuntimeTest {
         private val decryptResults: ArrayDeque<VpnPacketResult> = ArrayDeque(),
         private val periodicResults: ArrayDeque<VpnPacketResult> = ArrayDeque(),
     ) : VpnSession {
-        override val sessionIndex: UInt = 1u
+        override var sessionIndex: UInt = 0u
         override val isActive: Boolean = true
 
         val encryptInputs: MutableList<ByteArray> = mutableListOf()

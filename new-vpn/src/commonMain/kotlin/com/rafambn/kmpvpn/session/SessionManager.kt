@@ -1,5 +1,8 @@
 package com.rafambn.kmpvpn.session
 
+import com.rafambn.kmpvpn.VpnConfiguration
+import com.rafambn.kmpvpn.iface.VpnInterface
+import com.rafambn.kmpvpn.iface.VpnPeerStats
 import com.rafambn.kmpvpn.VpnAdapterConfiguration
 
 /**
@@ -34,6 +37,22 @@ interface SessionManager {
 
     /**
      * Closes all known sessions.
+     * Implementations should also stop any active data-plane runtime they own.
      */
     fun closeAll()
+
+    /**
+     * Starts or refreshes the owned data-plane runtime for the current interface.
+     */
+    fun startRuntime(
+        configuration: VpnConfiguration,
+        vpnInterface: VpnInterface,
+        onFailure: (Throwable) -> Unit = {},
+    )
+
+    /**
+     * Returns current peer stats from the active data plane, or zeroed peer stats
+     * when no runtime-specific counters are available.
+     */
+    fun peerStats(): List<VpnPeerStats>
 }

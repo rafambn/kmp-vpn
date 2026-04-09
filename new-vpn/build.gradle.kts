@@ -67,7 +67,26 @@ kotlin {
             implementation(libs.kotlinx.coroutines.test)
         }
 
+        jvmMain.dependencies {
+            implementation(project(":new-vpn-daemon-protocol"))
+            implementation(project(":new-vpn-daemon-client-jvm"))
+        }
+
+        jvmTest.dependencies {
+            implementation(kotlin("test-junit5"))
+            implementation(libs.kotlinx.rpc.krpc.server)
+            implementation(libs.kotlinx.rpc.krpc.serialization.json)
+            implementation(libs.kotlinx.rpc.krpc.ktor.server)
+            implementation(libs.ktor.server.netty)
+            implementation(libs.ktor.server.websockets)
+        }
     }
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    systemProperty("kmpvpn.platform.interface.mode", "in-memory")
+    systemProperty("kmpvpn.platform.runtime.mode", "disabled")
 }
 
 //Publishing your Kotlin Multiplatform library to Maven Central

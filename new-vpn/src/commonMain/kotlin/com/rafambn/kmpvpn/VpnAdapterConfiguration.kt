@@ -1,7 +1,7 @@
 package com.rafambn.kmpvpn
 
 /**
- * WireGuard session/runtime configuration consumed by session and userspace runtime code.
+ * WireGuard session/data-plane configuration consumed by the session manager.
  */
 interface VpnAdapterConfiguration {
 
