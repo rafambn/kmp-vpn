@@ -1,8 +1,10 @@
 package com.rafambn.kmpvpn
 
-import com.rafambn.kmpvpn.iface.PlatformInterfaceFactory
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
+import com.rafambn.kmpvpn.session.SessionManager
+import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
 import com.rafambn.kmpvpn.session.InMemoryTunnelManager
 import com.rafambn.kmpvpn.session.TunnelManager
 
@@ -17,15 +19,6 @@ class Vpn internal constructor(
     private val tunnelManager: TunnelManager,
     private val interfaceManager: InterfaceManager,
 ) : AutoCloseable {
-
-    constructor(
-        engine: Engine = Engine.BORINGTUN,
-        vpnConfiguration: VpnConfiguration,
-    ) : this(
-        vpnConfiguration = vpnConfiguration,
-        tunnelManager = InMemoryTunnelManager(engine = engine),
-        interfaceManager = PlatformInterfaceFactory.create(vpnConfiguration),
-    )
 
     init {
         requireValidConfiguration(vpnConfiguration)
@@ -329,5 +322,26 @@ class Vpn internal constructor(
 
     companion object {
         const val DEFAULT_PORT: Int = 51820
+
+        fun create(
+            engine: Engine = Engine.BORINGTUN,
+            vpnConfiguration: VpnConfiguration,
+            overrideModules: List<Module> = emptyList(),
+        ): Vpn {
+            VpnKoinBootstrap.ensureKoinStarted(overrideModules)
+            val koin = GlobalContext.get()
+            val sessionManagerProvider = koin.get<SessionManagerProvider>()
+            val vpnInterfaceProvider = koin.get<VpnInterfaceProvider>()
+
+            return Vpn(
+                vpnConfiguration = vpnConfiguration,
+                sessionManager = sessionManagerProvider.create(engine),
+                vpnInterface = vpnInterfaceProvider.create(vpnConfiguration),
+            )
+        }
+
+        internal fun resetKoinForTests() {
+            VpnKoinBootstrap.resetForTests()
+        }
     }
 }
