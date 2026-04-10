@@ -96,7 +96,11 @@ class Vpn internal constructor(
      * Starts the interface and ensures sessions are active.
      */
     fun start(): InterfaceManager {
-        val managedInterface = create()
+        val managedInterface = if (exists()) {
+            interfaceManager
+        } else {
+            create()
+        }
         if (isRunning()) {
             throw IllegalStateException(
                 "`${vpnConfiguration.interfaceName}` already exists and is up"
@@ -134,7 +138,7 @@ class Vpn internal constructor(
         try {
             managedInterface.up()
         } catch (throwable: Throwable) {
-            safeCloseSessions()
+            tunnelManager.closeAll()
             throw IllegalStateException(
                 "Interface operation `up` failed: ${throwable.message ?: "unknown"}",
                 throwable,
@@ -147,8 +151,8 @@ class Vpn internal constructor(
                 interfaceManager = managedInterface,
             )
         } catch (throwable: Throwable) {
-            safeRun { managedInterface.down() }
-            safeCloseSessions()
+            managedInterface.down()
+            tunnelManager.closeAll()
             throw IllegalStateException(
                 "Session operation `startRuntime` failed: ${throwable.message ?: "unknown"}",
                 throwable,
@@ -163,7 +167,7 @@ class Vpn internal constructor(
      */
     fun stop() {
         if (!exists()) {
-            safeCloseSessions()
+            tunnelManager.closeAll()
             return
         }
 
@@ -191,7 +195,7 @@ class Vpn internal constructor(
      */
     fun delete() {
         if (!exists()) {
-            safeCloseSessions()
+            tunnelManager.closeAll()
             return
         }
 
@@ -321,22 +325,6 @@ class Vpn internal constructor(
 
     override fun close() {
         stop()
-    }
-
-    private fun safeCloseSessions() {
-        try {
-            tunnelManager.closeAll()
-        } catch (_: Throwable) {
-            // best-effort rollback and cleanup
-        }
-    }
-
-    private fun safeRun(block: () -> Unit) {
-        try {
-            block()
-        } catch (_: Throwable) {
-            // best-effort rollback and cleanup
-        }
     }
 
     companion object {

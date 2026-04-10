@@ -3,6 +3,7 @@ package com.rafambn.kmpvpn
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
 import com.rafambn.kmpvpn.session.InMemoryTunnelManager
+import com.rafambn.kmpvpn.session.io.InMemoryTunPort
 import com.rafambn.kmpvpn.session.io.TunPort
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -59,6 +60,22 @@ class VpnStateTransitionTest {
         }
 
         assertEquals(VpnState.Created, vpn.state())
+    }
+
+    @Test
+    fun startSkipsCreateWhenInterfaceAlreadyExists() {
+        val configuration = baseConfiguration(interfaceName = "wg3")
+        val interfaceManager = ExistingInterfaceManager(configuration)
+        val vpn = Vpn(
+            vpnConfiguration = configuration,
+            tunnelManager = InMemoryTunnelManager(),
+            interfaceManager = interfaceManager,
+        )
+
+        vpn.start()
+
+        assertTrue(interfaceManager.isUp())
+        assertEquals(VpnState.Running, vpn.state())
     }
 
     private fun baseConfiguration(interfaceName: String): VpnConfiguration {
@@ -119,6 +136,51 @@ class VpnStateTransitionTest {
                 addresses = emptyList(),
                 dnsDomainPool = (emptyList<String>() to emptyList()),
                 mtu = null,
+            )
+        }
+    }
+
+    private class ExistingInterfaceManager(
+        private var currentConfiguration: VpnConfiguration,
+    ) : InterfaceManager {
+        private var up: Boolean = false
+        private val tun = InMemoryTunPort()
+
+        override fun exists(): Boolean = true
+
+        override fun create(config: VpnConfiguration) {
+            error("create should not be called when the interface already exists")
+        }
+
+        override fun up() {
+            up = true
+        }
+
+        override fun down() {
+            up = false
+        }
+
+        override fun delete() {
+            up = false
+        }
+
+        override fun isUp(): Boolean = up
+
+        override fun configuration(): VpnConfiguration = currentConfiguration
+
+        override fun tunPort(): TunPort = tun
+
+        override fun reconfigure(config: VpnConfiguration) {
+            currentConfiguration = config
+        }
+
+        override fun readInformation(): VpnInterfaceInformation {
+            return VpnInterfaceInformation(
+                interfaceName = currentConfiguration.interfaceName,
+                isUp = up,
+                addresses = currentConfiguration.addresses,
+                dnsDomainPool = currentConfiguration.dnsDomainPool,
+                mtu = currentConfiguration.mtu,
             )
         }
     }
