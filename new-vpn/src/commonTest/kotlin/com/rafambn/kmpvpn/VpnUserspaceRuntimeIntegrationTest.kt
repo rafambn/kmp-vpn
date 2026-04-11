@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class VpnUserspaceRuntimeIntegrationTest {
@@ -90,6 +91,40 @@ class VpnUserspaceRuntimeIntegrationTest {
     }
 
     @Test
+    fun informationIncludesDefinedConfigurationAlongsideObservedInterfaceState() {
+        val definedConfiguration = configuration(
+            interfaceName = "wg-drift",
+            listenPort = 51820,
+            addresses = listOf("10.20.30.2/32"),
+        )
+        val interfaceManager = DriftedInformationInterfaceManager(
+            initialConfiguration = definedConfiguration,
+            observedAddresses = listOf("10.88.0.1/32"),
+            observedDnsDomainPool = listOf("os.local") to listOf("9.9.9.9"),
+            observedMtu = 1280,
+            observedListenPort = 60000,
+        )
+        val vpn = vpn(
+            configuration = definedConfiguration,
+            interfaceManager = interfaceManager,
+        )
+
+        vpn.create()
+        definedConfiguration.addresses += "10.20.30.3/32"
+
+        val information = requireNotNull(vpn.information())
+        val configured = requireNotNull(information.vpnConfiguration)
+
+        assertEquals(listOf("10.88.0.1/32"), information.addresses)
+        assertEquals(1280, information.mtu)
+        assertEquals(60000, information.listenPort)
+        assertEquals(listOf("10.20.30.2/32"), configured.addresses)
+        assertEquals(51820, configured.listenPort)
+        assertNotEquals(information.addresses, configured.addresses)
+        assertNotEquals(information.listenPort, configured.listenPort)
+    }
+
+    @Test
     fun reconfigureRestartsRuntimeWhenListenPortChanges() {
         val runtimeFactory = RecordingRuntimeFactory()
         val vpn = vpn(
@@ -111,7 +146,7 @@ class VpnUserspaceRuntimeIntegrationTest {
 
     private fun vpn(
         configuration: VpnConfiguration,
-        interfaceManager: RecordingInterfaceManager = RecordingInterfaceManager(),
+        interfaceManager: InterfaceManager = RecordingInterfaceManager(),
         runtimeFactory: RecordingRuntimeFactory = RecordingRuntimeFactory(),
     ): Vpn {
         return Vpn(
@@ -124,10 +159,12 @@ class VpnUserspaceRuntimeIntegrationTest {
     private fun configuration(
         interfaceName: String,
         listenPort: Int? = null,
+        addresses: List<String> = emptyList(),
     ): VpnConfiguration {
         return DefaultVpnConfiguration(
             interfaceName = interfaceName,
             listenPort = listenPort,
+            addresses = addresses.toMutableList(),
             privateKey = privateKey,
             peers = listOf(
                 VpnPeer(
@@ -138,6 +175,54 @@ class VpnUserspaceRuntimeIntegrationTest {
                 ),
             ),
         )
+    }
+
+    private class DriftedInformationInterfaceManager(
+        initialConfiguration: VpnConfiguration,
+        private val observedAddresses: List<String>,
+        private val observedDnsDomainPool: Pair<List<String>, List<String>>,
+        private val observedMtu: Int?,
+        private val observedListenPort: Int?,
+    ) : InterfaceManager {
+        private var created: Boolean = false
+        private var currentConfiguration: VpnConfiguration = initialConfiguration
+        private val tun = InMemoryTunPort()
+
+        override fun exists(): Boolean = created
+
+        override fun create(config: VpnConfiguration) {
+            created = true
+            currentConfiguration = config
+        }
+
+        override fun up() = Unit
+
+        override fun down() = Unit
+
+        override fun delete() {
+            created = false
+        }
+
+        override fun isUp(): Boolean = true
+
+        override fun configuration(): VpnConfiguration = currentConfiguration
+
+        override fun tunPort(): TunPort = tun
+
+        override fun reconfigure(config: VpnConfiguration) {
+            currentConfiguration = config
+        }
+
+        override fun readInformation(): VpnInterfaceInformation {
+            return VpnInterfaceInformation(
+                interfaceName = currentConfiguration.interfaceName,
+                isUp = true,
+                addresses = observedAddresses,
+                dnsDomainPool = observedDnsDomainPool,
+                mtu = observedMtu,
+                listenPort = observedListenPort,
+            )
+        }
     }
 
     private class RecordingRuntimeFactory(

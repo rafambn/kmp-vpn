@@ -203,20 +203,6 @@ class Vpn internal constructor(
     }
 
     /**
-     * Returns current effective interface configuration.
-     */
-    fun configuration(): VpnConfiguration {
-        return try {
-            interfaceManager.configuration()
-        } catch (throwable: Throwable) {
-            throw IllegalStateException(
-                "Interface operation `configuration` failed: ${throwable.message ?: "unknown"}",
-                throwable,
-            )
-        }
-    }
-
-    /**
      * Returns current live interface information, or `null` if the interface does not exist.
      */
     fun information(): VpnInterfaceInformation? {
@@ -234,11 +220,22 @@ class Vpn internal constructor(
         }
 
         val runtimePeerStats = tunnelManager.peerStats()
-        return if (runtimePeerStats.isEmpty()) {
+        val liveInformation = if (runtimePeerStats.isEmpty()) {
             baseInformation
         } else {
             baseInformation.copy(peerStats = runtimePeerStats)
         }
+
+        val currentDefinedConfiguration = try {
+            interfaceManager.configuration()
+        } catch (throwable: Throwable) {
+            throw IllegalStateException(
+                "Interface operation `configuration` failed: ${throwable.message ?: "unknown"}",
+                throwable,
+            )
+        }
+
+        return liveInformation.copy(vpnConfiguration = currentDefinedConfiguration)
     }
 
     /**

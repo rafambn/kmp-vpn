@@ -1,5 +1,7 @@
 package com.rafambn.kmpvpn.iface
 
+import com.rafambn.kmpvpn.VpnConfiguration
+
 /**
  * Read-only interface information returned by [InterfaceManager.readInformation].
  */
@@ -11,4 +13,5 @@ data class VpnInterfaceInformation(
     val mtu: Int?,
     val listenPort: Int? = null,
     val peerStats: List<VpnPeerStats> = emptyList(),
+    val vpnConfiguration: VpnConfiguration? = null,
 )

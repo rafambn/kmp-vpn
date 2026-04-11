@@ -75,7 +75,8 @@ class VpnFoundationWiringTest {
             ),
         )
 
-        val current = vpn.configuration()
+        val current = requireNotNull(vpn.information()).vpnConfiguration
+        requireNotNull(current)
 
         assertEquals(listOf("corp.local") to listOf("9.9.9.9"), current.dnsDomainPool)
         assertEquals(listOf("10.20.30.2/32"), current.addresses)
