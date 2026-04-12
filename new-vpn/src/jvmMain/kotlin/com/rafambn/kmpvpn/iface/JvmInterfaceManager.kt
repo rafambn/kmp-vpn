@@ -34,12 +34,15 @@ class JvmInterfaceManager(
         }
 
         if (currentConfiguration == null) {
-            currentConfiguration = snapshot(config)
+            currentConfiguration = config.copy()
             return
         }
 
         try {
-            applyConfiguration(config)
+            applyMtu(config)
+            applyAddresses(config)
+            applyRoutes(config)
+            applyDns(config)
         } catch (throwable: Throwable) {
             currentConfiguration = null
             up = false
@@ -49,12 +52,11 @@ class JvmInterfaceManager(
             )
         }
 
-        currentConfiguration = snapshot(config)
+        currentConfiguration = config.copy()
         up = false
     }
 
     override fun up() {
-        val interfaceName = requireCreatedInterface()
         if (up) {
             return
         }
@@ -73,10 +75,6 @@ class JvmInterfaceManager(
     }
 
     override fun delete() {
-        if (up) {
-            commandExecutor.setInterfaceUp(interfaceName, false)
-        }
-
         commandExecutor.deleteInterface(interfaceName)
         currentConfiguration = null
         up = false
@@ -91,11 +89,11 @@ class JvmInterfaceManager(
     }
 
     override fun configuration(): VpnConfiguration {
-        return snapshot(
-            currentConfiguration ?: throw IllegalStateException(
-                "Cannot access configuration before create()",
-            ),
+        val configuration = currentConfiguration ?: throw IllegalStateException(
+            "Cannot access configuration before create()",
         )
+
+        return configuration.copy()
     }
 
     override fun tunPort(): TunPort {
@@ -103,87 +101,41 @@ class JvmInterfaceManager(
     }
 
     override fun reconfigure(config: VpnConfiguration) {
-        requireValidConfiguration(config)
+        val previousConfiguration = currentConfiguration
+            ?: throw IllegalStateException("Cannot reconfigure before create()")
 
-        val interfaceName = requireCreatedInterface()
+        if (previousConfiguration == config) {
+            return
+        }
+
         require(config.interfaceName == interfaceName) {
             "Cannot reconfigure interface `$interfaceName` using `${config.interfaceName}`"
         }
 
-        val previousConfiguration = currentConfiguration
-            ?: throw IllegalStateException("Cannot reconfigure before create()")
+        requireValidConfiguration(config)
 
-        if (configurationsEquivalent(previousConfiguration, config)) {
-            return
-        }
-
-        val rollbackActions: MutableList<() -> Unit> = mutableListOf()
         try {
-            rollbackActions += { applyMtu(previousConfiguration) }
             applyMtu(config)
-
-            rollbackActions += { applyAddresses(previousConfiguration) }
             applyAddresses(config)
-
-            rollbackActions += { applyRoutes(previousConfiguration) }
             applyRoutes(config)
-
-            rollbackActions += { applyDns(previousConfiguration) }
             applyDns(config)
         } catch (throwable: Throwable) {
-            rollbackActions.asReversed().forEach { rollback -> rollback() }
             throw IllegalStateException(
                 "Failed to reconfigure interface `$interfaceName`: ${throwable.message ?: "unknown"}",
                 throwable,
             )
         }
 
-        currentConfiguration = snapshot(config)
+        currentConfiguration = config.copy()
     }
 
-    override fun readInformation(): VpnInterfaceInformation {
-        val interfaceName = requireCreatedInterface()
-        val configuration = currentConfiguration
-            ?: throw IllegalStateException("Cannot read interface information before create()")
+    override fun readInformation(): VpnInterfaceInformation? {
         val observedInformation = commandExecutor.readInformation(interfaceName)
 
         if (observedInformation != null) {
             up = observedInformation.isUp
-            return observedInformation.copy(
-                addresses = observedInformation.addresses.ifEmpty {
-                    configuration.addresses.toList()
-                },
-                dnsDomainPool = if (observedInformation.dnsDomainPool.first.isEmpty() &&
-                    observedInformation.dnsDomainPool.second.isEmpty()
-                ) {
-                    configuration.dnsDomainPool
-                } else {
-                    observedInformation.dnsDomainPool
-                },
-                mtu = observedInformation.mtu ?: configuration.mtu,
-                listenPort = observedInformation.listenPort ?: configuration.listenPort,
-                peerStats = observedInformation.peerStats.ifEmpty {
-                    defaultPeerStats(configuration.peers)
-                },
-            )
         }
-
-        return VpnInterfaceInformation(
-            interfaceName = interfaceName,
-            isUp = up,
-            addresses = configuration.addresses.toList(),
-            dnsDomainPool = configuration.dnsDomainPool,
-            mtu = configuration.mtu,
-            listenPort = configuration.listenPort,
-            peerStats = defaultPeerStats(configuration.peers),
-        )
-    }
-
-    private fun applyConfiguration(config: VpnConfiguration) {
-        applyMtu(config)
-        applyAddresses(config)
-        applyRoutes(config)
-        applyDns(config)
+        return observedInformation
     }
 
     private fun applyMtu(config: VpnConfiguration) {
@@ -198,68 +150,15 @@ class JvmInterfaceManager(
     private fun applyRoutes(config: VpnConfiguration) {
         commandExecutor.applyRoutes(
             interfaceName = config.interfaceName,
-            routes = routesFrom(config),
+            routes = config.peers
+                .flatMap { peer -> peer.allowedIps }
+                .filter { route -> route.isNotBlank() }
+                .distinct()
+                .sorted(),
         )
     }
 
     private fun applyDns(config: VpnConfiguration) {
         commandExecutor.applyDns(config.interfaceName, config.dnsDomainPool)
-    }
-
-    private fun routesFrom(config: VpnConfiguration): List<String> {
-        return config.peers
-            .flatMap { peer -> peer.allowedIps }
-            .filter { route -> route.isNotBlank() }
-            .distinct()
-            .sorted()
-    }
-
-    private fun requireCreatedInterface(): String {
-        return interfaceName
-    }
-
-    private fun defaultPeerStats(peers: List<VpnPeer>): List<VpnPeerStats> {
-        return peers.map { peer ->
-            VpnPeerStats(
-                publicKey = peer.publicKey,
-                endpointAddress = peer.endpointAddress,
-                endpointPort = peer.endpointPort,
-                allowedIps = peer.allowedIps.toList(),
-                receivedBytes = 0L,
-                transmittedBytes = 0L,
-                lastHandshakeEpochSeconds = null,
-            )
-        }
-    }
-
-    private fun configurationsEquivalent(first: VpnConfiguration, second: VpnConfiguration): Boolean {
-        return first.interfaceName == second.interfaceName &&
-                first.dnsDomainPool == second.dnsDomainPool &&
-                first.mtu == second.mtu &&
-                first.addresses.toList() == second.addresses.toList() &&
-                first.listenPort == second.listenPort &&
-                first.privateKey == second.privateKey &&
-                first.peers == second.peers
-    }
-
-    private fun snapshot(config: VpnConfiguration): VpnConfiguration {
-        return VpnConfiguration(
-            interfaceName = config.interfaceName,
-            dnsDomainPool = config.dnsDomainPool.first.toList() to config.dnsDomainPool.second.toList(),
-            mtu = config.mtu,
-            addresses = config.addresses.toMutableList(),
-            listenPort = config.listenPort,
-            privateKey = config.privateKey,
-            peers = config.peers.map { peer ->
-                VpnPeer(
-                    endpointPort = peer.endpointPort,
-                    endpointAddress = peer.endpointAddress,
-                    publicKey = peer.publicKey,
-                    allowedIps = peer.allowedIps.toList(),
-                    persistentKeepalive = peer.persistentKeepalive,
-                    presharedKey = peer.presharedKey,
-                )
-            },
-        )
     }
 }

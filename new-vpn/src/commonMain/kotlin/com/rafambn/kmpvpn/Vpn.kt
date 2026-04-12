@@ -219,13 +219,6 @@ class Vpn internal constructor(
             )
         }
 
-        val runtimePeerStats = tunnelManager.peerStats()
-        val liveInformation = if (runtimePeerStats.isEmpty()) {
-            baseInformation
-        } else {
-            baseInformation.copy(peerStats = runtimePeerStats)
-        }
-
         val currentDefinedConfiguration = try {
             interfaceManager.configuration()
         } catch (throwable: Throwable) {
@@ -235,7 +228,23 @@ class Vpn internal constructor(
             )
         }
 
-        return liveInformation.copy(vpnConfiguration = currentDefinedConfiguration)
+        val liveInformation = baseInformation ?: VpnInterfaceInformation(
+            interfaceName = currentDefinedConfiguration.interfaceName,
+            isUp = interfaceManager.isUp(),
+            addresses = currentDefinedConfiguration.addresses.toList(),
+            dnsDomainPool = currentDefinedConfiguration.dnsDomainPool,
+            mtu = currentDefinedConfiguration.mtu,
+            listenPort = currentDefinedConfiguration.listenPort,
+        )
+
+        val runtimePeerStats = tunnelManager.peerStats()
+        val informationWithPeerStats = if (runtimePeerStats.isEmpty()) {
+            liveInformation
+        } else {
+            liveInformation.copy(peerStats = runtimePeerStats)
+        }
+
+        return informationWithPeerStats.copy(vpnConfiguration = currentDefinedConfiguration)
     }
 
     /**

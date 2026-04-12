@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class JvmInterfaceManagerTest {
@@ -77,7 +78,7 @@ class JvmInterfaceManagerTest {
         assertEquals(baseConfiguration.addresses, current.addresses)
         assertEquals(baseConfiguration.peers, current.peers)
 
-        val info = interfaceManager.readInformation()
+        val info = assertNotNull(interfaceManager.readInformation())
         assertEquals(baseConfiguration.dnsDomainPool, info.dnsDomainPool)
         assertEquals(baseConfiguration.addresses, info.addresses)
 
@@ -120,7 +121,7 @@ class JvmInterfaceManagerTest {
             ),
         )
 
-        val information = interfaceManager.readInformation()
+        val information = assertNotNull(interfaceManager.readInformation())
 
         assertEquals(1, information.peerStats.size)
         assertEquals("peer-a", information.peerStats.single().publicKey)

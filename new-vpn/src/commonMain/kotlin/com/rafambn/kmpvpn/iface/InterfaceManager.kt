@@ -58,5 +58,5 @@ interface InterfaceManager {
     /**
      * Reads current interface information.
      */
-    fun readInformation(): VpnInterfaceInformation
+    fun readInformation(): VpnInterfaceInformation?
 }
