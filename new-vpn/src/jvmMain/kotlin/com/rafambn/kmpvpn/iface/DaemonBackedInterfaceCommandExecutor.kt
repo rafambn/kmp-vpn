@@ -18,57 +18,73 @@ class DaemonBackedInterfaceCommandExecutor(
     private val host: String,
     private val port: Int,
     private val timeout: Duration,
-    private val clientFactory: (String, Int, Duration) -> DaemonProcessClient = { resolvedHost, resolvedPort, resolvedTimeout ->
-        createDaemonProcessClient(
-            host = resolvedHost,
-            port = resolvedPort,
-            timeout = resolvedTimeout,
-        )
-    },
 ) : InterfaceCommandExecutor {
+    private val client: DaemonProcessClient by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        val httpClient = HttpClient(CIO) {
+            install(WebSockets)
+            installKrpc {
+                serialization {
+                    json()
+                }
+            }
+        }
+        val rpcClient = httpClient.rpc(daemonRpcUrl(host = host, port = port))
+        DaemonProcessClient(
+            service = rpcClient.withService<DaemonProcessApi>(),
+            timeout = timeout,
+            resourceCloser = { httpClient.close() },
+        )
+    }
+
     override fun interfaceExists(interfaceName: String): Boolean {
-        val result = execute("interfaceExists") { client ->
+        val result = callDaemon(operation = "interfaceExists", interfaceName = interfaceName) { client ->
             client.interfaceExists(interfaceName)
         }
         return when (result) {
             is CommandResult.Success -> result.data.exists
-            is CommandResult.Failure -> throw failureFor("interfaceExists", interfaceName, result)
+            is CommandResult.Failure -> throw IllegalStateException(
+                "Daemon operation `interfaceExists` failed for `$interfaceName`: ${result.kind} ${result.message}",
+            )
         }
     }
 
     override fun setInterfaceUp(interfaceName: String, up: Boolean) {
-        expectSuccess(operation = "setInterfaceState", interfaceName = interfaceName) { client ->
+        callDaemon(operation = "setInterfaceState", interfaceName = interfaceName) { client ->
             client.setInterfaceState(interfaceName = interfaceName, up = up)
         }
     }
 
     override fun applyMtu(interfaceName: String, mtu: Int) {
-        expectSuccess(operation = "applyMtu", interfaceName = interfaceName) { client ->
+        callDaemon(operation = "applyMtu", interfaceName = interfaceName) { client ->
             client.applyMtu(interfaceName = interfaceName, mtu = mtu)
         }
     }
 
     override fun applyAddresses(interfaceName: String, addresses: List<String>) {
-        expectSuccess(operation = "applyAddresses", interfaceName = interfaceName) { client ->
+        callDaemon(operation = "applyAddresses", interfaceName = interfaceName) { client ->
             client.applyAddresses(interfaceName = interfaceName, addresses = addresses)
         }
     }
 
     override fun applyRoutes(interfaceName: String, routes: List<String>) {
-        expectSuccess(operation = "applyRoutes", interfaceName = interfaceName) { client ->
+        callDaemon(operation = "applyRoutes", interfaceName = interfaceName) { client ->
             client.applyRoutes(interfaceName = interfaceName, routes = routes)
         }
     }
 
     override fun applyDns(interfaceName: String, dnsDomainPool: Pair<List<String>, List<String>>) {
-        expectSuccess(operation = "applyDns", interfaceName = interfaceName) { client ->
+        callDaemon(operation = "applyDns", interfaceName = interfaceName) { client ->
             client.applyDns(interfaceName = interfaceName, dnsDomainPool = dnsDomainPool)
         }
     }
 
     override fun readInformation(interfaceName: String): VpnInterfaceInformation? {
         val result = runCatching {
-            execute("readInterfaceInformation") { client ->
+            callDaemon(
+                operation = "readInterfaceInformation",
+                interfaceName = interfaceName,
+                throwOnFailure = false,
+            ) { client ->
                 client.readInterfaceInformation(interfaceName = interfaceName)
             }
         }.getOrNull() ?: return null
@@ -84,31 +100,20 @@ class DaemonBackedInterfaceCommandExecutor(
     }
 
     override fun deleteInterface(interfaceName: String) {
-        expectSuccess(operation = "deleteInterface", interfaceName = interfaceName) { client ->
+        callDaemon(operation = "deleteInterface", interfaceName = interfaceName) { client ->
             client.deleteInterface(interfaceName = interfaceName)
         }
     }
 
-    private fun <S> expectSuccess(
+    private fun <S> callDaemon(
         operation: String,
         interfaceName: String,
-        rpcCall: suspend (DaemonProcessClient) -> CommandResult<S>,
-    ) {
-        when (val result = execute(operation, rpcCall)) {
-            is CommandResult.Success -> Unit
-            is CommandResult.Failure -> throw failureFor(operation, interfaceName, result)
-        }
-    }
-
-    private fun <S> execute(
-        operation: String,
+        throwOnFailure: Boolean = true,
         rpcCall: suspend (DaemonProcessClient) -> CommandResult<S>,
     ): CommandResult<S> {
-        return try {
-            clientFactory(host, port, timeout).use { client ->
-                runBlocking {
-                    rpcCall(client)
-                }
+        val result = try {
+            runBlocking {
+                rpcCall(client)
             }
         } catch (throwable: Throwable) {
             throw IllegalStateException(
@@ -116,37 +121,11 @@ class DaemonBackedInterfaceCommandExecutor(
                 throwable,
             )
         }
-    }
-
-    private fun failureFor(
-        operation: String,
-        interfaceName: String,
-        failure: CommandResult.Failure,
-    ): IllegalStateException {
-        return IllegalStateException(
-            "Daemon operation `$operation` failed for `$interfaceName`: ${failure.kind} ${failure.message}",
-        )
-    }
-}
-
-internal fun createDaemonProcessClient(
-    host: String,
-    port: Int,
-    timeout: Duration,
-): DaemonProcessClient {
-    val httpClient = HttpClient(CIO) {
-        install(WebSockets)
-        installKrpc {
-            serialization {
-                json()
-            }
+        if (throwOnFailure && result is CommandResult.Failure) {
+            throw IllegalStateException(
+                "Daemon operation `$operation` failed for `$interfaceName`: ${result.kind} ${result.message}",
+            )
         }
+        return result
     }
-    val rpcClient = httpClient.rpc(daemonRpcUrl(host = host, port = port))
-
-    return DaemonProcessClient(
-        service = rpcClient.withService<DaemonProcessApi>(),
-        timeout = timeout,
-        resourceCloser = { httpClient.close() },
-    )
 }

@@ -28,7 +28,6 @@ internal object JvmInterfaceKoinBootstrap {
                     timeout = Duration.ofMillis(
                         System.getProperty(JvmInterfaceProperties.DAEMON_TIMEOUT_MILLIS)?.toLongOrNull() ?: 15_000L,
                     ),
-                    clientFactory = ::createDaemonProcessClient,
                 )
             }
         }
