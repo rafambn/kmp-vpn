@@ -13,7 +13,7 @@ import com.rafambn.kmpvpn.session.TunnelManager
  * while delegating session and interface concerns to [TunnelManager] and [InterfaceManager].
  */
 class Vpn internal constructor(
-    val vpnConfiguration: VpnConfiguration,
+    private var vpnConfiguration: VpnConfiguration,
     private val tunnelManager: TunnelManager,
     private val interfaceManager: InterfaceManager,
 ) : AutoCloseable {
@@ -255,6 +255,8 @@ class Vpn internal constructor(
                 throwable,
             )
         }
+
+        vpnConfiguration = config
 
         try {
             tunnelManager.reconcileSessions(interfaceManager.configuration())
