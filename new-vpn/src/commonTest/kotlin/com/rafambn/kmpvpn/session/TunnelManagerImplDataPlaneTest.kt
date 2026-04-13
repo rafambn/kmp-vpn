@@ -189,7 +189,7 @@ class TunnelManagerImplDataPlaneTest {
     ): TunnelManagerImpl {
         return TunnelManagerImpl(
             peerSessionFactory = RecordingSessionFactory(sessions.associateBy { session -> session.peerPublicKey }),
-            userspaceDataPlaneFactory = { _, _, _, _, _ -> null },
+            createDataPlane = { _, _, _, _, _ -> null },
             tunPacketPortProvider = { tunPacketPort },
         )
     }

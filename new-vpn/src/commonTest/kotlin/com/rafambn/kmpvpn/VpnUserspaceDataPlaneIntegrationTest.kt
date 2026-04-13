@@ -49,7 +49,7 @@ class VpnUserspaceDataPlaneIntegrationTest {
     fun dataPlaneStartFailureRollsBackToCreatedState() {
         val dataPlaneFactory = RecordingDataPlaneFactory(failOnCreate = true)
         val interfaceManager = RecordingInterfaceManager()
-        val tunnelManager = TunnelManagerImpl(userspaceDataPlaneFactory = dataPlaneFactory::create)
+        val tunnelManager = TunnelManagerImpl(createDataPlane = dataPlaneFactory::create)
         val vpn = Vpn(
             vpnConfiguration = configuration(interfaceName = "utun141"),
             tunnelManager = tunnelManager,
@@ -149,7 +149,7 @@ class VpnUserspaceDataPlaneIntegrationTest {
     ): Vpn {
         return Vpn(
             vpnConfiguration = configuration,
-            tunnelManager = TunnelManagerImpl(userspaceDataPlaneFactory = dataPlaneFactory::create),
+            tunnelManager = TunnelManagerImpl(createDataPlane = dataPlaneFactory::create),
             interfaceManager = interfaceManager,
         )
     }
@@ -253,7 +253,7 @@ class VpnUserspaceDataPlaneIntegrationTest {
 
     private class RecordingDataPlane(
         private val stats: List<VpnPeerStats>,
-    ) : UserspaceDataPlane {
+    ) : UserspaceDataPlane() {
         private var running: Boolean = true
 
         override fun isRunning(): Boolean = running
