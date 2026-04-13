@@ -333,7 +333,7 @@ internal class TunnelManagerImpl(
 
     private companion object {
         val DEFAULT_PACKET_BUFFER_SIZE: UInt = 65535u
-        const val DEFAULT_MAX_FLUSH_ITERATIONS: Int = 16
+        const val DEFAULT_MAX_FLUSH_ITERATIONS: Int = 256
 
         fun defaultFactory(engine: Engine): PeerSessionFactory {
             return when (engine) {

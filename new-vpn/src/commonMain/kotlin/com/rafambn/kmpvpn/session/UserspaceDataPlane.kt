@@ -98,27 +98,24 @@ internal class UserspaceDataPlane(
 
     private suspend fun runPeriodicLoop() {
         runWorkerLoop(
-            initialDelayMillis = periodicIntervalDelayMillis,
-            idleDelayMillis = periodicIntervalDelayMillis,
-            delayAfterEachIteration = true,
             work = {
+                delay(periodicIntervalDelayMillis)
                 runPeriodicWorkOnce(udpPort)
+                false
             },
         )
     }
 
     private suspend fun runWorkerLoop(
-        initialDelayMillis: Long = 0L,
         idleDelayMillis: Long = this.idleDelayMillis,
-        delayAfterEachIteration: Boolean = false,
         work: suspend () -> Boolean,
     ) {
         try {
-            delay(initialDelayMillis.coerceAtLeast(0L))
+            val normalizedIdleDelayMillis = idleDelayMillis.coerceAtLeast(0L)
             while (running.value) {
                 val didWork = work()
-                if (delayAfterEachIteration || !didWork) {
-                    delay(idleDelayMillis.coerceAtLeast(0L))
+                if (!didWork && normalizedIdleDelayMillis > 0L) {
+                    delay(normalizedIdleDelayMillis)
                 }
             }
         } catch (_: CancellationException) {
