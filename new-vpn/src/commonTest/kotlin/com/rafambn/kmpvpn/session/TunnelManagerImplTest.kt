@@ -14,13 +14,14 @@ class TunnelManagerImplTest {
 
     @Test
     fun reconcileSessionsCreatesActiveSessionsForAllPeers() {
-        val manager = TunnelManagerImpl(peerSessionFactory = RecordingSessionFactory())
+        val factory = RecordingSessionFactory()
+        val manager = TunnelManagerImpl(peerSessionFactory = factory)
 
         manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
 
         assertTrue(manager.hasActiveSessions())
-        assertEquals(2, manager.sessionSnapshots().size)
-        assertTrue(manager.sessionSnapshots().all { session -> session.isActive })
+        assertEquals(2, manager.peerStats().size)
+        assertTrue(factory.createdSessions.all { session -> session.isActive })
     }
 
     @Test
@@ -33,8 +34,8 @@ class TunnelManagerImplTest {
         manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
         manager.reconcileSessions(configurationWithPeers("peer-b"))
 
-        assertNull(manager.sessionSnapshot("peer-a"))
-        assertNotNull(manager.sessionSnapshot("peer-b"))
+        assertNull(manager.peerStats().firstOrNull { stats -> stats.publicKey == "peer-a" })
+        assertNotNull(manager.peerStats().firstOrNull { stats -> stats.publicKey == "peer-b" })
         assertEquals(1, factory.sessionByPeer("peer-a")?.closeCalls)
     }
 
@@ -69,7 +70,7 @@ class TunnelManagerImplTest {
         assertEquals(1, factory.createdSessions.first().closeCalls)
         assertEquals(0, factory.createdSessions.last().closeCalls)
 
-        val session = manager.sessionSnapshot("peer-a")
+        val session = manager.peerStats().singleOrNull { stats -> stats.publicKey == "peer-a" }
         assertNotNull(session)
         assertEquals("10.0.0.2", session.endpointAddress)
         assertEquals(51821, session.endpointPort)
@@ -101,20 +102,25 @@ class TunnelManagerImplTest {
         }
 
         assertTrue(throwable.message?.contains("factory forced failure") == true)
-        assertTrue(manager.sessionSnapshots().isEmpty())
+        assertTrue(manager.peerStats().isEmpty())
         assertEquals(1, factory.createdSessions.size)
         assertEquals(1, factory.createdSessions.first().closeCalls)
     }
 
     @Test
     fun peerIndexesAreDeterministicAcrossPeerOrderChanges() {
-        val manager = TunnelManagerImpl(peerSessionFactory = RecordingSessionFactory())
+        val factory = RecordingSessionFactory()
+        val manager = TunnelManagerImpl(peerSessionFactory = factory)
 
         manager.reconcileSessions(configurationWithPeers("peer-b", "peer-a"))
-        val first = manager.sessionSnapshots().associate { it.peerPublicKey to it.peerIndex }
+        val first = factory.createdSessions
+            .take(2)
+            .associate { session -> session.peerPublicKey to session.peerIndex }
 
         manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
-        val second = manager.sessionSnapshots().associate { it.peerPublicKey to it.peerIndex }
+        val second = factory.createdSessions
+            .drop(2)
+            .associate { session -> session.peerPublicKey to session.peerIndex }
 
         assertEquals(first, second)
         assertEquals(1, second["peer-a"])
