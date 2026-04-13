@@ -3,7 +3,7 @@ package com.rafambn.kmpvpn
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.VpnPeerStats
-import com.rafambn.kmpvpn.session.InMemoryTunnelManager
+import com.rafambn.kmpvpn.session.TunnelManagerImpl
 import com.rafambn.kmpvpn.session.UserspaceRuntimeHandle
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -49,7 +49,7 @@ class VpnUserspaceRuntimeIntegrationTest {
     fun runtimeStartFailureRollsBackToCreatedState() {
         val runtimeFactory = RecordingRuntimeFactory(failOnCreate = true)
         val interfaceManager = RecordingInterfaceManager()
-        val tunnelManager = InMemoryTunnelManager(userspaceRuntimeFactory = runtimeFactory::create)
+        val tunnelManager = TunnelManagerImpl(userspaceRuntimeFactory = runtimeFactory::create)
         val vpn = Vpn(
             vpnConfiguration = configuration(interfaceName = "utun141"),
             tunnelManager = tunnelManager,
@@ -149,7 +149,7 @@ class VpnUserspaceRuntimeIntegrationTest {
     ): Vpn {
         return Vpn(
             vpnConfiguration = configuration,
-            tunnelManager = InMemoryTunnelManager(userspaceRuntimeFactory = runtimeFactory::create),
+            tunnelManager = TunnelManagerImpl(userspaceRuntimeFactory = runtimeFactory::create),
             interfaceManager = interfaceManager,
         )
     }

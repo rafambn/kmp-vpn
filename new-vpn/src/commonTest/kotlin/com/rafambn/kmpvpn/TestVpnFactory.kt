@@ -2,12 +2,12 @@ package com.rafambn.kmpvpn
 
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
-import com.rafambn.kmpvpn.session.InMemoryTunnelManager
+import com.rafambn.kmpvpn.session.TunnelManagerImpl
 import com.rafambn.kmpvpn.session.TunnelManager
 
 internal fun testVpn(
     configuration: VpnConfiguration,
-    tunnelManager: TunnelManager = InMemoryTunnelManager(),
+    tunnelManager: TunnelManager = disabledTestTunnelManager(),
     interfaceManager: InterfaceManager = TestInterfaceManager(configuration),
 ): Vpn {
     return Vpn(
@@ -15,6 +15,10 @@ internal fun testVpn(
         tunnelManager = tunnelManager,
         interfaceManager = interfaceManager,
     )
+}
+
+internal fun disabledTestTunnelManager(): TunnelManager {
+    return TunnelManagerImpl(userspaceRuntimeFactory = { _, _, _, _, _ -> null })
 }
 
 internal class TestInterfaceManager(

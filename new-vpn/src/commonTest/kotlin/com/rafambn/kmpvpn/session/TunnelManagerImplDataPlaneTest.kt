@@ -16,7 +16,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-class InMemoryTunnelManagerDataPlaneTest {
+class TunnelManagerImplDataPlaneTest {
 
     @Test
     fun longestPrefixMatchRoutesTunPacketsToTheCorrectPeer() = runTest {
@@ -186,8 +186,8 @@ class InMemoryTunnelManagerDataPlaneTest {
     private fun manager(
         vararg sessions: QueueVpnSession,
         tunnelPacketPort: TunnelPacketPort = InMemoryTunnelPacketPort(),
-    ): InMemoryTunnelManager {
-        return InMemoryTunnelManager(
+    ): TunnelManagerImpl {
+        return TunnelManagerImpl(
             sessionFactory = RecordingSessionFactory(sessions.associateBy { session -> session.peerPublicKey }),
             userspaceRuntimeFactory = { _, _, _, _, _ -> null },
             tunnelPacketPortProvider = { tunnelPacketPort },

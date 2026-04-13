@@ -10,11 +10,11 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class InMemoryTunnelManagerTest {
+class TunnelManagerImplTest {
 
     @Test
     fun reconcileSessionsCreatesActiveSessionsForAllPeers() {
-        val manager = InMemoryTunnelManager(sessionFactory = RecordingSessionFactory())
+        val manager = TunnelManagerImpl(sessionFactory = RecordingSessionFactory())
 
         manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
 
@@ -25,7 +25,7 @@ class InMemoryTunnelManagerTest {
     @Test
     fun reconcileSessionsRemovesMissingPeers() {
         val factory = RecordingSessionFactory()
-        val manager = InMemoryTunnelManager(
+        val manager = TunnelManagerImpl(
             sessionFactory = factory,
         )
 
@@ -40,7 +40,7 @@ class InMemoryTunnelManagerTest {
     @Test
     fun reconcileSessionsReplacesChangedPeerConfiguration() {
         val factory = RecordingSessionFactory()
-        val manager = InMemoryTunnelManager(
+        val manager = TunnelManagerImpl(
             sessionFactory = factory,
         )
 
@@ -76,7 +76,7 @@ class InMemoryTunnelManagerTest {
 
     @Test
     fun duplicatePeerKeysAreRejected() {
-        val manager = InMemoryTunnelManager(sessionFactory = RecordingSessionFactory())
+        val manager = TunnelManagerImpl(sessionFactory = RecordingSessionFactory())
 
         val duplicated = configurationWithPeer(
             VpnPeer(publicKey = "peer-a"),
@@ -91,7 +91,7 @@ class InMemoryTunnelManagerTest {
     @Test
     fun partialCreateFailureRollsBackNewlyCreatedSessions() {
         val factory = RecordingSessionFactory(failOnPeer = "peer-b")
-        val manager = InMemoryTunnelManager(
+        val manager = TunnelManagerImpl(
             sessionFactory = factory,
         )
 
@@ -107,7 +107,7 @@ class InMemoryTunnelManagerTest {
 
     @Test
     fun sessionIndexesAreDeterministicAcrossPeerOrderChanges() {
-        val manager = InMemoryTunnelManager(sessionFactory = RecordingSessionFactory())
+        val manager = TunnelManagerImpl(sessionFactory = RecordingSessionFactory())
 
         manager.reconcileSessions(configurationWithPeers("peer-b", "peer-a"))
         val first = manager.sessions().associate { it.peerPublicKey to it.sessionIndex }

@@ -20,7 +20,7 @@ import com.rafambn.kmpvpn.session.io.UdpEndpoint
 import com.rafambn.kmpvpn.session.io.UdpPort
 import com.rafambn.kmpvpn.session.io.VpnPacketResult
 
-internal class InMemoryTunnelManager(
+internal class TunnelManagerImpl(
     engine: Engine = Engine.BORINGTUN,
     private val sessionFactory: VpnSessionFactory = defaultFactory(engine),
     private val userspaceRuntimeFactory: UserspaceRuntimeFactory = PlatformUserspaceRuntimeFactory::create,

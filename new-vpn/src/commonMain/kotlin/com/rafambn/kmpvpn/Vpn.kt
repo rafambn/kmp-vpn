@@ -3,7 +3,7 @@ package com.rafambn.kmpvpn
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.PlatformInterfaceFactory
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
-import com.rafambn.kmpvpn.session.InMemoryTunnelManager
+import com.rafambn.kmpvpn.session.TunnelManagerImpl
 import com.rafambn.kmpvpn.session.TunnelManager
 
 /**
@@ -22,7 +22,7 @@ class Vpn internal constructor(
         engine: Engine = Engine.BORINGTUN,
     ) : this(
         vpnConfiguration = configuration,
-        tunnelManager = InMemoryTunnelManager(engine = engine),
+        tunnelManager = TunnelManagerImpl(engine = engine),
         interfaceManager = PlatformInterfaceFactory.create(configuration),
     )
 

@@ -92,7 +92,6 @@ kotlin {
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     systemProperty("kmpvpn.platform.interface.mode", "in-memory")
-    systemProperty("kmpvpn.platform.runtime.mode", "disabled")
 }
 
 //Publishing your Kotlin Multiplatform library to Maven Central

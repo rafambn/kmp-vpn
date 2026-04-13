@@ -48,6 +48,12 @@ class VpnConstructorWiringTest {
     private fun configuration(interfaceName: String): VpnConfiguration {
         return VpnConfiguration(
             interfaceName = interfaceName,
+            listenPort = when (interfaceName) {
+                "utun101" -> 52101
+                "utun102" -> 52102
+                "utun103" -> 52103
+                else -> 52100
+            },
             privateKey = privateKey,
             peers = listOf(
                 VpnPeer(
