@@ -6,11 +6,12 @@ import com.rafambn.kmpvpn.daemon.planner.ApplyAddresses
 import com.rafambn.kmpvpn.daemon.planner.ApplyDns
 import com.rafambn.kmpvpn.daemon.planner.ApplyMtu
 import com.rafambn.kmpvpn.daemon.planner.ApplyRoutes
+import com.rafambn.kmpvpn.daemon.planner.CommandFailed
+import com.rafambn.kmpvpn.daemon.planner.CreateInterface
 import com.rafambn.kmpvpn.daemon.planner.DeleteInterface
 import com.rafambn.kmpvpn.daemon.planner.InterfaceExists
 import com.rafambn.kmpvpn.daemon.planner.PlanExecutor
 import com.rafambn.kmpvpn.daemon.planner.PlatformOperationPlanner
-import com.rafambn.kmpvpn.daemon.planner.CommandFailed
 import com.rafambn.kmpvpn.daemon.planner.ProcessException
 import com.rafambn.kmpvpn.daemon.planner.ProcessTimeout
 import com.rafambn.kmpvpn.daemon.planner.ReadInterfaceInformation
@@ -22,23 +23,43 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ApplyAddressesResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyDnsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyMtuResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyRoutesResponse
+import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.DeleteInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.InterfaceExistsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.PingResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ReadInterfaceInformationResponse
-import com.rafambn.kmpvpn.daemon.protocol.response.SetInterfaceStateResponse
+import com.rafambn.kmpvpn.daemon.tun.TunHandleFactory
+import com.rafambn.kmpvpn.daemon.tun.RealTunHandleFactory
+import com.rafambn.kmpvpn.daemon.tun.RealTunHandle
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+
+internal const val MAX_PACKET_FRAME_SIZE: Int = 65535
 
 class DaemonProcessApiImpl internal constructor(
     private val operationPlanner: PlatformOperationPlanner = PlatformOperationPlanner.fromOs(),
     processLauncher: ProcessLauncher = CommonsExecProcessLauncher(),
+    private val tunHandleFactory: TunHandleFactory = RealTunHandleFactory(),
 ) : DaemonProcessApi {
-    private val planExecutor = PlanExecutor(
-        operationPlanner = operationPlanner,
-        processLauncher = processLauncher,
-    )
+    private val planExecutor = PlanExecutor(operationPlanner = operationPlanner, processLauncher = processLauncher)
+    private val packetStateLock = Any()
+    private val activePacketIoInterfaces = mutableSetOf<String>()
 
     override suspend fun ping(): CommandResult<PingResponse> {
         return CommandResult.success(PingResponse)
+    }
+
+    override suspend fun createInterface(interfaceName: String): CommandResult<CreateInterfaceResponse> {
+        return try {
+            DaemonPayloadValidator.validateInterfaceName(interfaceName)
+            planExecutor.run(CreateInterface(interfaceName = interfaceName))
+            CommandResult.success(CreateInterfaceResponse(interfaceName = interfaceName))
+        } catch (failure: Throwable) {
+            toFailureResult(commandType = "CREATE_INTERFACE", failure = failure)
+        }
     }
 
     override suspend fun interfaceExists(interfaceName: String): CommandResult<InterfaceExistsResponse> {
@@ -53,36 +74,7 @@ class DaemonProcessApiImpl internal constructor(
                 ),
             )
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "INTERFACE_EXISTS",
-                failure = failure,
-            )
-        }
-    }
-
-    override suspend fun setInterfaceState(
-        interfaceName: String,
-        up: Boolean,
-    ): CommandResult<SetInterfaceStateResponse> {
-        return try {
-            DaemonPayloadValidator.validateInterfaceName(interfaceName)
-            planExecutor.run(
-                SetInterfaceState(
-                interfaceName = interfaceName,
-                up = up,
-                ),
-            )
-            CommandResult.success(
-                SetInterfaceStateResponse(
-                    interfaceName = interfaceName,
-                    up = up,
-                ),
-            )
-        } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "SET_INTERFACE_STATE",
-                failure = failure,
-            )
+            toFailureResult(commandType = "INTERFACE_EXISTS", failure = failure)
         }
     }
 
@@ -90,23 +82,10 @@ class DaemonProcessApiImpl internal constructor(
         return try {
             DaemonPayloadValidator.validateInterfaceName(interfaceName)
             DaemonPayloadValidator.validateMtu(mtu)
-            planExecutor.run(
-                ApplyMtu(
-                interfaceName = interfaceName,
-                mtu = mtu,
-                ),
-            )
-            CommandResult.success(
-                ApplyMtuResponse(
-                    interfaceName = interfaceName,
-                    mtu = mtu,
-                ),
-            )
+            planExecutor.run(ApplyMtu(interfaceName = interfaceName, mtu = mtu))
+            CommandResult.success(ApplyMtuResponse(interfaceName = interfaceName, mtu = mtu))
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "APPLY_MTU",
-                failure = failure,
-            )
+            toFailureResult(commandType = "APPLY_MTU", failure = failure)
         }
     }
 
@@ -117,23 +96,10 @@ class DaemonProcessApiImpl internal constructor(
         return try {
             DaemonPayloadValidator.validateInterfaceName(interfaceName)
             DaemonPayloadValidator.validateAddresses(addresses)
-            planExecutor.run(
-                ApplyAddresses(
-                interfaceName = interfaceName,
-                addresses = addresses,
-                ),
-            )
-            CommandResult.success(
-                ApplyAddressesResponse(
-                    interfaceName = interfaceName,
-                    addresses = addresses,
-                ),
-            )
+            planExecutor.run(ApplyAddresses(interfaceName = interfaceName, addresses = addresses))
+            CommandResult.success(ApplyAddressesResponse(interfaceName = interfaceName, addresses = addresses))
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "APPLY_ADDRESSES",
-                failure = failure,
-            )
+            toFailureResult(commandType = "APPLY_ADDRESSES", failure = failure)
         }
     }
 
@@ -144,23 +110,10 @@ class DaemonProcessApiImpl internal constructor(
         return try {
             DaemonPayloadValidator.validateInterfaceName(interfaceName)
             DaemonPayloadValidator.validateRoutes(routes)
-            planExecutor.run(
-                ApplyRoutes(
-                interfaceName = interfaceName,
-                routes = routes,
-                ),
-            )
-            CommandResult.success(
-                ApplyRoutesResponse(
-                    interfaceName = interfaceName,
-                    routes = routes,
-                ),
-            )
+            planExecutor.run(ApplyRoutes(interfaceName = interfaceName, routes = routes))
+            CommandResult.success(ApplyRoutesResponse(interfaceName = interfaceName, routes = routes))
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "APPLY_ROUTES",
-                failure = failure,
-            )
+            toFailureResult(commandType = "APPLY_ROUTES", failure = failure)
         }
     }
 
@@ -171,23 +124,10 @@ class DaemonProcessApiImpl internal constructor(
         return try {
             DaemonPayloadValidator.validateInterfaceName(interfaceName)
             DaemonPayloadValidator.validateDnsDomainPool(dnsDomainPool)
-            planExecutor.run(
-                ApplyDns(
-                interfaceName = interfaceName,
-                dnsDomainPool = dnsDomainPool,
-                ),
-            )
-            CommandResult.success(
-                ApplyDnsResponse(
-                    interfaceName = interfaceName,
-                    dnsDomainPool = dnsDomainPool,
-                ),
-            )
+            planExecutor.run(ApplyDns(interfaceName = interfaceName, dnsDomainPool = dnsDomainPool))
+            CommandResult.success(ApplyDnsResponse(interfaceName = interfaceName, dnsDomainPool = dnsDomainPool))
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "APPLY_DNS",
-                failure = failure,
-            )
+            toFailureResult(commandType = "APPLY_DNS", failure = failure)
         }
     }
 
@@ -205,12 +145,9 @@ class DaemonProcessApiImpl internal constructor(
             ) ?: error(
                 "Unable to parse interface information for `${operationPlanner.platformId}` from daemon command output.",
             )
-            CommandResult.success(parsedInformation,)
+            CommandResult.success(parsedInformation)
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "READ_INTERFACE_INFORMATION",
-                failure = failure,
-            )
+            toFailureResult(commandType = "READ_INTERFACE_INFORMATION", failure = failure)
         }
     }
 
@@ -222,10 +159,68 @@ class DaemonProcessApiImpl internal constructor(
             planExecutor.run(DeleteInterface(interfaceName = interfaceName))
             CommandResult.success(DeleteInterfaceResponse(interfaceName = interfaceName))
         } catch (failure: Throwable) {
-            toFailureResult(
-                commandType = "DELETE_INTERFACE",
-                failure = failure,
-            )
+            toFailureResult(commandType = "DELETE_INTERFACE", failure = failure)
+        }
+    }
+
+    override fun packetIO(
+        interfaceName: String,
+        outgoingPackets: Flow<ByteArray>,
+    ): Flow<ByteArray> = channelFlow {
+        DaemonPayloadValidator.validateInterfaceName(interfaceName)
+        synchronized(packetStateLock) {
+            if (activePacketIoInterfaces.contains(interfaceName)) {
+                throw IllegalStateException("Session already active for $interfaceName")
+            }
+        }
+        val output = planExecutor.run(InterfaceExists(interfaceName = interfaceName)).lastOutput
+            ?: error("INTERFACE_EXISTS must produce an execution output.")
+        check(output.exitCode == 0) {
+            "Interface does not exist: $interfaceName"
+        }
+        val handle = try {
+            tunHandleFactory.open(interfaceName)
+        } catch (failure: Throwable) {
+            synchronized(packetStateLock) {
+                activePacketIoInterfaces.remove(interfaceName)
+            }
+            throw failure
+        }
+
+        val writerJob = launch {
+            outgoingPackets.collect { packet ->
+                if (packet.size > MAX_PACKET_FRAME_SIZE) {
+                    throw IllegalArgumentException("Oversized packet frame: ${packet.size}")
+                }
+                if (packet.isNotEmpty()) {
+                    handle.writePacket(packet)
+                }
+            }
+        }
+
+        try {
+            planExecutor.run(SetInterfaceState(interfaceName = interfaceName, up = true))
+
+            if (handle is RealTunHandle) {
+                handle.openDevice()
+            }
+
+            while (isActive) {
+                val packet = handle.readPacket() ?: continue
+                if (packet.size > MAX_PACKET_FRAME_SIZE) {
+                    throw IllegalStateException("Oversized packet from TUN: ${packet.size}")
+                }
+                if (packet.isNotEmpty()) {
+                    send(packet)
+                }
+            }
+        } finally {
+            runCatching { writerJob.cancelAndJoin() }
+            runCatching { planExecutor.run(SetInterfaceState(interfaceName = interfaceName, up = false)) }
+            runCatching { handle.close() }
+            synchronized(packetStateLock) {
+                activePacketIoInterfaces.remove(interfaceName)
+            }
         }
     }
 

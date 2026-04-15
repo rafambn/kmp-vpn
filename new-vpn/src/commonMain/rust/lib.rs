@@ -164,4 +164,97 @@ fn map_tunn_result(result: TunnResult<'_>) -> TunnelPacketResult {
     }
 }
 
+// TUN Device Interface
+use std::sync::Mutex as StdMutex;
+use tun_rs::SyncDevice;
+
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum TunError {
+    #[error("failed to create tun device: {0}")]
+    DeviceCreationFailed(String),
+    #[error("failed to read packet: {0}")]
+    ReadFailed(String),
+    #[error("failed to write packet: {0}")]
+    WriteFailed(String),
+    #[error("device already closed")]
+    DeviceClosed,
+}
+
+// Wrapper for tun-rs to expose via uniffi
+#[derive(uniffi::Object)]
+pub struct TunDevice {
+    device: Arc<StdMutex<Option<SyncDevice>>>,
+    interface_name: String,
+}
+
+#[uniffi::export]
+impl TunDevice {
+    #[uniffi::constructor]
+    pub fn new(interface_name: String) -> Arc<Self> {
+        Arc::new(TunDevice {
+            device: Arc::new(StdMutex::new(None)),
+            interface_name,
+        })
+    }
+
+    pub fn open(&self, ipv4_addr: String, prefix_len: u8) -> Result<(), TunError> {
+        let mut device_builder = tun_rs::DeviceBuilder::new();
+
+        // Set IPv4 configuration
+        device_builder = device_builder.ipv4(ipv4_addr, prefix_len, None);
+
+        // Build sync device (blocking)
+        let device = device_builder
+            .build_sync()
+            .map_err(|e: std::io::Error| TunError::DeviceCreationFailed(e.to_string()))?;
+
+        let mut guard = self.device.lock().map_err(|_| {
+            TunError::DeviceCreationFailed("Failed to acquire device lock".to_string())
+        })?;
+        *guard = Some(device);
+
+        Ok(())
+    }
+
+    pub fn read_packet(&self) -> Result<Vec<u8>, TunError> {
+        let mut guard = self.device.lock().map_err(|_| {
+            TunError::ReadFailed("Failed to acquire device lock".to_string())
+        })?;
+        let device = guard.as_mut().ok_or(TunError::DeviceClosed)?;
+
+        let mut buf = vec![0; 65536];
+        let len = device
+            .recv(&mut buf)
+            .map_err(|e: std::io::Error| TunError::ReadFailed(e.to_string()))?;
+
+        buf.truncate(len);
+        Ok(buf)
+    }
+
+    pub fn write_packet(&self, packet: Vec<u8>) -> Result<(), TunError> {
+        let mut guard = self.device.lock().map_err(|_| {
+            TunError::WriteFailed("Failed to acquire device lock".to_string())
+        })?;
+        let device = guard.as_mut().ok_or(TunError::DeviceClosed)?;
+
+        device
+            .send(&packet)
+            .map_err(|e: std::io::Error| TunError::WriteFailed(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub fn get_interface_name(&self) -> String {
+        self.interface_name.clone()
+    }
+
+    pub fn shutdown(&self) -> Result<(), TunError> {
+        let mut guard = self.device.lock().map_err(|_| {
+            TunError::DeviceCreationFailed("Failed to acquire device lock".to_string())
+        })?;
+        *guard = None;
+        Ok(())
+    }
+}
+
 uniffi::setup_scaffolding!();

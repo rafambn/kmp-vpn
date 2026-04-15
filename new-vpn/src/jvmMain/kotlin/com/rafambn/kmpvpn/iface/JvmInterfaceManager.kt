@@ -1,23 +1,31 @@
 package com.rafambn.kmpvpn.iface
 
 import com.rafambn.kmpvpn.VpnConfiguration
-import com.rafambn.kmpvpn.VpnPeer
 import com.rafambn.kmpvpn.requireValidConfiguration
+import com.rafambn.kmpvpn.session.DuplexChannelPipe
 
 /**
  * JVM-backed [InterfaceManager] implementation using privileged
  * [InterfaceCommandExecutor] operations.
+ *
+ * The cleartext packet pipe is provided by the caller. [up] opens the packetIO RPC bridge
+ * via [InterfaceCommandExecutor.openPacketBridge]; [down] closes it.
  */
 class JvmInterfaceManager(
     private val interfaceName: String,
     private val commandExecutor: InterfaceCommandExecutor,
+    private val tunPipe: DuplexChannelPipe<ByteArray>,
 ) : InterfaceManager {
     private var currentConfiguration: VpnConfiguration? = null
     private var up: Boolean = false
 
+    private var activeBridge: AutoCloseable? = null
+
     override fun exists(): Boolean {
         val observedExists = commandExecutor.interfaceExists(interfaceName)
         if (!observedExists) {
+            runCatching { activeBridge?.close() }
+            activeBridge = null
             currentConfiguration = null
             up = false
         }
@@ -34,12 +42,20 @@ class JvmInterfaceManager(
             return
         }
 
+        var interfaceCreated = false
         try {
+            commandExecutor.createInterface(interfaceName)
+            interfaceCreated = true
             applyMtu(config)
             applyAddresses(config)
             applyRoutes(config)
             applyDns(config)
         } catch (throwable: Throwable) {
+            if (interfaceCreated) {
+                runCatching { commandExecutor.deleteInterface(interfaceName) }
+            }
+            runCatching { activeBridge?.close() }
+            activeBridge = null
             currentConfiguration = null
             up = false
             throw IllegalStateException(
@@ -52,36 +68,50 @@ class JvmInterfaceManager(
         up = false
     }
 
-    override fun up() {
-        if (up) {
+    override fun up(onBridgeFailure: (Throwable) -> Unit) {
+        if (activeBridge != null && up) {
             return
         }
 
-        commandExecutor.setInterfaceUp(interfaceName, true)
+        runCatching { activeBridge?.close() }
+        activeBridge = null
+        activeBridge = commandExecutor.openPacketBridge(
+            interfaceName = interfaceName,
+            pipe = tunPipe,
+        ) { throwable ->
+            up = false
+            val failedBridge = activeBridge
+            runCatching { failedBridge?.close() }
+            if (activeBridge === failedBridge) {
+                activeBridge = null
+            }
+            onBridgeFailure(throwable)
+        }
         up = true
     }
 
     override fun down() {
-        if (!up) {
+        if (activeBridge == null && !up) {
             return
         }
 
-        commandExecutor.setInterfaceUp(interfaceName, false)
+        runCatching { activeBridge?.close() }
+        activeBridge = null
         up = false
     }
 
     override fun delete() {
+        runCatching { activeBridge?.close() }
+        activeBridge = null
         commandExecutor.deleteInterface(interfaceName)
         currentConfiguration = null
         up = false
     }
 
     override fun isUp(): Boolean {
-        val observed = commandExecutor.readInformation(interfaceName)?.isUp
-        if (observed != null) {
-            up = observed
-        }
-        return up
+        val observedUp = commandExecutor.readInformation(interfaceName)?.isUp == true
+        up = observedUp
+        return observedUp
     }
 
     override fun configuration(): VpnConfiguration {
@@ -123,12 +153,7 @@ class JvmInterfaceManager(
     }
 
     override fun readInformation(): VpnInterfaceInformation? {
-        val observedInformation = commandExecutor.readInformation(interfaceName)
-
-        if (observedInformation != null) {
-            up = observedInformation.isUp
-        }
-        return observedInformation
+        return commandExecutor.readInformation(interfaceName)
     }
 
     private fun applyMtu(config: VpnConfiguration) {

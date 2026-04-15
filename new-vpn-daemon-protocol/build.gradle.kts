@@ -10,7 +10,7 @@ kotlin {
 
 dependencies {
     implementation(libs.kotlinx.rpc.core)
-    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.serialization.protobuf)
 
     testImplementation(kotlin("test-junit5"))
 }

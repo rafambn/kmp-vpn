@@ -7,14 +7,15 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ApplyAddressesResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyDnsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyMtuResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyRoutesResponse
+import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.DeleteInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.InterfaceExistsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.PingResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ReadInterfaceInformationResponse
-import com.rafambn.kmpvpn.daemon.protocol.response.SetInterfaceStateResponse
 import io.ktor.client.HttpClient
 import java.time.Duration
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withTimeout
 import org.koin.core.module.Module
 
@@ -58,18 +59,15 @@ class DaemonProcessClient(
         return callWithTimeout(timeout) { service.ping() }
     }
 
-    override suspend fun interfaceExists(interfaceName: String): CommandResult<InterfaceExistsResponse> {
+    override suspend fun createInterface(interfaceName: String): CommandResult<CreateInterfaceResponse> {
         return callWithTimeout(timeout) {
-            service.interfaceExists(interfaceName = interfaceName)
+            service.createInterface(interfaceName = interfaceName)
         }
     }
 
-    override suspend fun setInterfaceState(
-        interfaceName: String,
-        up: Boolean,
-    ): CommandResult<SetInterfaceStateResponse> {
+    override suspend fun interfaceExists(interfaceName: String): CommandResult<InterfaceExistsResponse> {
         return callWithTimeout(timeout) {
-            service.setInterfaceState(interfaceName = interfaceName, up = up)
+            service.interfaceExists(interfaceName = interfaceName)
         }
     }
 
@@ -126,6 +124,13 @@ class DaemonProcessClient(
         return callWithTimeout(timeout) {
             service.deleteInterface(interfaceName = interfaceName)
         }
+    }
+
+    override fun packetIO(
+        interfaceName: String,
+        outgoingPackets: Flow<ByteArray>,
+    ): Flow<ByteArray> {
+        return service.packetIO(interfaceName = interfaceName, outgoingPackets = outgoingPackets)
     }
 
     private suspend fun <D> callWithTimeout(

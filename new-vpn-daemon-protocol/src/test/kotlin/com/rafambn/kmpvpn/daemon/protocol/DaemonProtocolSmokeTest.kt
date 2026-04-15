@@ -1,20 +1,21 @@
 package com.rafambn.kmpvpn.daemon.protocol
 
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyDnsResponse
+import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ReadInterfaceInformationResponse
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromByteArray
+import kotlinx.serialization.encodeToByteArray
+import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
+@OptIn(ExperimentalSerializationApi::class)
 class DaemonProtocolSmokeTest {
 
-    private val json = Json {
-        ignoreUnknownKeys = false
-        encodeDefaults = true
-        explicitNulls = true
-    }
+    private val protoBuf = ProtoBuf
 
     @Test
     fun applyDnsPayloadRoundTripPreservesTypedFields() {
@@ -26,8 +27,8 @@ class DaemonProtocolSmokeTest {
                 ),
         )
 
-        val encoded = json.encodeToString(original)
-        val decoded = json.decodeFromString<ApplyDnsResponse>(encoded)
+        val encoded = protoBuf.encodeToByteArray(original)
+        val decoded = protoBuf.decodeFromByteArray<ApplyDnsResponse>(encoded)
 
         assertEquals("wg0", decoded.interfaceName)
         assertEquals(
@@ -47,8 +48,8 @@ class DaemonProtocolSmokeTest {
             ),
         )
 
-        val encoded = json.encodeToString(original)
-        val decoded = json.decodeFromString<CommandResult<Unit>>(encoded) as CommandResult.Failure
+        val encoded = protoBuf.encodeToByteArray(original)
+        val decoded = protoBuf.decodeFromByteArray<CommandResult<Unit>>(encoded) as CommandResult.Failure
 
         assertEquals(DaemonErrorKind.COMMAND_FAILED, decoded.kind)
         assertEquals("invalid route", decoded.message)
@@ -58,19 +59,10 @@ class DaemonProtocolSmokeTest {
 
     @Test
     fun deserializationRejectsMalformedCommandShape() {
-        val valid = json.encodeToString(
-            ApplyDnsResponse(
-                interfaceName = "wg0",
-                dnsDomainPool = (listOf("corp.local") to listOf("1.1.1.1")),
-            ),
-        )
-        val malformed = valid.replace(
-            "\"dnsDomainPool\":{\"first\":[\"corp.local\"],\"second\":[\"1.1.1.1\"]}",
-            "\"dnsDomainPool\":\"not-an-object\"",
-        )
+        val malformed = byteArrayOf(0x0A)
 
         kotlin.test.assertFailsWith<SerializationException> {
-            json.decodeFromString<ApplyDnsResponse>(malformed)
+            protoBuf.decodeFromByteArray<ApplyDnsResponse>(malformed)
         }
     }
 
@@ -85,8 +77,8 @@ class DaemonProtocolSmokeTest {
             listenPort = 51820,
         )
 
-        val encoded = json.encodeToString(original)
-        val decoded = json.decodeFromString<ReadInterfaceInformationResponse>(encoded)
+        val encoded = protoBuf.encodeToByteArray(original)
+        val decoded = protoBuf.decodeFromByteArray<ReadInterfaceInformationResponse>(encoded)
 
         assertEquals("wg0", decoded.interfaceName)
         assertEquals(true, decoded.isUp)
@@ -114,8 +106,19 @@ class DaemonProtocolSmokeTest {
     }
 
     @Test
+    fun createInterfaceResponseRoundTripPreservesInterfaceName() {
+        val original = CreateInterfaceResponse(interfaceName = "utun0")
+
+        val encoded = protoBuf.encodeToByteArray(original)
+        val decoded = protoBuf.decodeFromByteArray<CreateInterfaceResponse>(encoded)
+
+        assertEquals("utun0", decoded.interfaceName)
+    }
+
+    @Test
     fun daemonRpcUrlWrapsIpv6Hosts() {
         assertEquals("ws://[::1]:8787/services", daemonRpcUrl(host = "::1", port = 8787))
         assertEquals("ws://127.0.0.1:8787/services", daemonRpcUrl(host = "127.0.0.1", port = 8787))
     }
+
 }

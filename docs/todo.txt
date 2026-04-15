@@ -1,3 +1,5 @@
 ISSUES AND TASKS
 
--Change the constructor of DaemonProcessClient so that i don't need the dependencies of it in the main vpn module
+-Migrate the uniffi do a separated module
+-Fix/Improve api of Daemon
+-Maybe implement daemon in native

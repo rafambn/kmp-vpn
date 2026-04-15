@@ -2,43 +2,73 @@ package com.rafambn.kmpvpn
 
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
-import com.rafambn.kmpvpn.session.TunnelManagerImpl
-import com.rafambn.kmpvpn.session.TunnelManager
+import com.rafambn.kmpvpn.session.CryptoSessionManager
+import com.rafambn.kmpvpn.session.DuplexChannelPipe
+import com.rafambn.kmpvpn.session.SocketManager
+import com.rafambn.kmpvpn.session.io.UdpDatagram
+import com.rafambn.kmpvpn.session.io.UdpEndpoint
 
 internal fun testVpn(
     configuration: VpnConfiguration,
-    tunnelManager: TunnelManager = TunnelManagerImpl(),
-    interfaceManager: InterfaceManager = TestInterfaceManager(normalizedTestConfiguration(configuration)),
+    cryptoSessionManager: CryptoSessionManager? = null,
+    socketManager: SocketManager? = null,
+    interfaceManager: InterfaceManager? = null,
 ): Vpn {
     return Vpn(
-        vpnConfiguration = normalizedTestConfiguration(configuration),
-        tunnelManager = tunnelManager,
+        configuration = normalizedTestConfiguration(configuration),
+        cryptoSessionManager = cryptoSessionManager,
+        socketManager = socketManager,
         interfaceManager = interfaceManager,
     )
 }
 
-internal class TestInterfaceManager(
+internal class MockSocketManager : SocketManager {
+    var startCalls: Int = 0
+    var stopCalls: Int = 0
+
+    override fun start(listenPort: Int, networkPipe: DuplexChannelPipe<UdpDatagram>, onFailure: (Throwable) -> Unit) {
+        startCalls++
+    }
+
+    override fun stop() {
+        stopCalls++
+    }
+
+    override fun isRunning(): Boolean = false
+}
+
+internal class MockInterfaceManager(
     private var currentConfiguration: VpnConfiguration,
 ) : InterfaceManager {
+    var createCalls: Int = 0
+    var upCalls: Int = 0
+    var downCalls: Int = 0
+    var deleteCalls: Int = 0
+    var reconfigureCalls: Int = 0
+
     private var created: Boolean = false
     private var up: Boolean = false
 
     override fun exists(): Boolean = created
 
     override fun create(config: VpnConfiguration) {
+        createCalls++
         created = true
         currentConfiguration = snapshotConfiguration(config)
     }
 
-    override fun up() {
+    override fun up(onBridgeFailure: (Throwable) -> Unit) {
+        upCalls++
         up = true
     }
 
     override fun down() {
+        downCalls++
         up = false
     }
 
     override fun delete() {
+        deleteCalls++
         created = false
         up = false
     }
@@ -48,6 +78,7 @@ internal class TestInterfaceManager(
     override fun configuration(): VpnConfiguration = snapshotConfiguration(currentConfiguration)
 
     override fun reconfigure(config: VpnConfiguration) {
+        reconfigureCalls++
         currentConfiguration = snapshotConfiguration(config)
     }
 

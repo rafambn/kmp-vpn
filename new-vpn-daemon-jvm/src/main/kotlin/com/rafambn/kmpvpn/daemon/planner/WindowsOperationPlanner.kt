@@ -11,6 +11,12 @@ internal class WindowsOperationPlanner : PlatformOperationPlanner {
 
     override fun plan(operation: DaemonOperation): ExecutionPlan {
         return when (operation) {
+            is CreateInterface -> operation.executionPlanOf(
+                // Windows TUN devices require the Wintun native library.
+                // Shell-based creation is not possible; return an empty plan.
+                // DaemonProcessApiImpl opens packet handle lazily in packetIO().
+            )
+
             is InterfaceExists -> operation.executionPlanOf(
                 executionStep(
                     binary = CommandBinary.NETSH,

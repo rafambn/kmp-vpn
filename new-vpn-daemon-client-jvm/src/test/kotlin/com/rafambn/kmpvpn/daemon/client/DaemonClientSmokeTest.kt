@@ -8,11 +8,11 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ApplyRoutesResponse
 import com.rafambn.kmpvpn.daemon.protocol.CommandResult
 import com.rafambn.kmpvpn.daemon.protocol.DaemonProcessApi
 import com.rafambn.kmpvpn.daemon.protocol.DaemonErrorKind
+import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.DeleteInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.InterfaceExistsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.PingResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ReadInterfaceInformationResponse
-import com.rafambn.kmpvpn.daemon.protocol.response.SetInterfaceStateResponse
 import io.ktor.server.application.install
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
@@ -23,16 +23,20 @@ import io.ktor.server.websocket.WebSockets
 import java.net.ServerSocket
 import java.time.Duration
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.rpc.krpc.ktor.server.Krpc
 import kotlinx.rpc.krpc.ktor.server.rpc
-import kotlinx.rpc.krpc.serialization.json.json
+import kotlinx.rpc.krpc.serialization.protobuf.protobuf
 import org.koin.dsl.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalSerializationApi::class)
 class DaemonClientSmokeTest {
     @Test
     fun krpcClientPerformsHandshakeAndRoundTrip() = runBlocking {
@@ -218,7 +222,7 @@ class DaemonClientSmokeTest {
             install(WebSockets)
             install(Krpc) {
                 serialization {
-                    json()
+                    protobuf()
                 }
             }
 
@@ -226,7 +230,7 @@ class DaemonClientSmokeTest {
                 rpc(DAEMON_RPC_PATH) {
                     rpcConfig {
                         serialization {
-                            json()
+                            protobuf()
                         }
                     }
                     registerService<DaemonProcessApi> {
@@ -260,14 +264,13 @@ class DaemonClientSmokeTest {
     private open inner class StubDaemonProcessApi : DaemonProcessApi {
         override suspend fun ping(): CommandResult<PingResponse> = unsupported("PING")
 
+        override suspend fun createInterface(
+            interfaceName: String,
+        ): CommandResult<CreateInterfaceResponse> = unsupported("CREATE_INTERFACE")
+
         override suspend fun interfaceExists(
             interfaceName: String,
         ): CommandResult<InterfaceExistsResponse> = unsupported("INTERFACE_EXISTS")
-
-        override suspend fun setInterfaceState(
-            interfaceName: String,
-            up: Boolean,
-        ): CommandResult<SetInterfaceStateResponse> = unsupported("SET_INTERFACE_STATE")
 
         override suspend fun applyMtu(
             interfaceName: String,
@@ -296,6 +299,11 @@ class DaemonClientSmokeTest {
         override suspend fun deleteInterface(
             interfaceName: String,
         ): CommandResult<DeleteInterfaceResponse> = unsupported("DELETE_INTERFACE")
+
+        override fun packetIO(
+            interfaceName: String,
+            outgoingPackets: Flow<ByteArray>,
+        ): Flow<ByteArray> = emptyFlow()
     }
 
     private fun randomPort(): Int {

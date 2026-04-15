@@ -4,6 +4,7 @@ import com.rafambn.kmpvpn.daemon.planner.ApplyDns
 import com.rafambn.kmpvpn.daemon.planner.ApplyMtu
 import com.rafambn.kmpvpn.daemon.planner.ApplyRoutes
 import com.rafambn.kmpvpn.daemon.command.CommandBinary
+import com.rafambn.kmpvpn.daemon.planner.CreateInterface
 import com.rafambn.kmpvpn.daemon.planner.InterfaceExists
 import com.rafambn.kmpvpn.daemon.planner.LinuxOperationPlanner
 import com.rafambn.kmpvpn.daemon.planner.MacOsOperationPlanner
@@ -110,5 +111,16 @@ class PlatformOperationPlannerTest {
         assertEquals(listOf("-details", "address", "show", "dev", "wg0"), linuxReadStep.arguments)
         assertEquals(CommandBinary.IFCONFIG, macReadStep.binary)
         assertEquals(CommandBinary.NETSH, windowsReadStep.binary)
+    }
+
+    @Test
+    fun linuxCreateTreatsOnlyZeroExitAsSuccess() {
+        val linux = LinuxOperationPlanner()
+
+        val step = linux.plan(CreateInterface("wg0")).steps.single()
+
+        assertEquals(setOf(0), step.acceptedExitCodes)
+        assertEquals(CommandBinary.IP, step.invocation.binary)
+        assertEquals(listOf("tuntap", "add", "dev", "wg0", "mode", "tun"), step.invocation.arguments)
     }
 }

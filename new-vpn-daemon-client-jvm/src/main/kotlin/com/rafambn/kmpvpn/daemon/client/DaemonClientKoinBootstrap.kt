@@ -5,15 +5,17 @@ import com.rafambn.kmpvpn.daemon.protocol.daemonRpcUrl
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.WebSockets
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.rpc.krpc.ktor.client.installKrpc
 import kotlinx.rpc.krpc.ktor.client.rpc
-import kotlinx.rpc.krpc.serialization.json.json
+import kotlinx.rpc.krpc.serialization.protobuf.protobuf
 import kotlinx.rpc.withService
 import org.koin.core.module.Module
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
 
+@OptIn(ExperimentalSerializationApi::class)
 internal object DaemonClientKoinBootstrap {
     private val baseModule: Module = module {
         factory<HttpClient> {
@@ -21,8 +23,7 @@ internal object DaemonClientKoinBootstrap {
                 install(WebSockets)
                 installKrpc {
                     serialization {
-                        // TODO(vpn-rebuild): migrate kRPC serialization to Protobuf once protocol models are stable and annotated with @ProtoNumber.
-                        json()
+                        protobuf()
                     }
                 }
             }

@@ -27,8 +27,8 @@ class DaemonKoinBootstrapTest {
         val firstDependencies = DaemonKoinBootstrap.resolveDependencies(overrideModules = listOf(overrideModule))
         val secondDependencies = DaemonKoinBootstrap.resolveDependencies(overrideModules = listOf(secondOverrideModule))
 
-        val firstResult = firstDependencies.service.setInterfaceState(interfaceName = "utun0", up = true)
-        val secondResult = secondDependencies.service.setInterfaceState(interfaceName = "utun1", up = true)
+        val firstResult = firstDependencies.service.applyMtu(interfaceName = "utun0", mtu = 1420)
+        val secondResult = secondDependencies.service.applyMtu(interfaceName = "utun1", mtu = 1420)
 
         assertTrue(firstResult.isSuccess)
         assertTrue(secondResult.isSuccess)

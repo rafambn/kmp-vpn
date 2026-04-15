@@ -5,11 +5,10 @@ const val DEFAULT_DAEMON_PORT: Int = 8787
 const val DAEMON_RPC_PATH: String = "/services"
 
 fun daemonRpcUrl(host: String, port: Int): String {
-    val normalizedHost = if (':' in host && !host.startsWith("[")) {
-        "[$host]"
-    } else {
-        host
-    }
-
+    val normalizedHost = normalizeHost(host)
     return "ws://$normalizedHost:$port$DAEMON_RPC_PATH"
+}
+
+private fun normalizeHost(host: String): String {
+    return if (':' in host && !host.startsWith("[")) "[$host]" else host
 }

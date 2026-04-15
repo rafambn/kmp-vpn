@@ -5,6 +5,12 @@ internal sealed interface DaemonOperation {
     val interfaceName: String
 }
 
+internal data class CreateInterface(
+    override val interfaceName: String,
+) : DaemonOperation {
+    override val label: String = "CREATE_INTERFACE"
+}
+
 internal data class InterfaceExists(
     override val interfaceName: String,
 ) : DaemonOperation {

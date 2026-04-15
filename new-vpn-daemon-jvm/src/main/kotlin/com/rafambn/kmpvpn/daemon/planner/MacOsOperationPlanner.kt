@@ -12,6 +12,12 @@ internal class MacOsOperationPlanner : PlatformOperationPlanner {
 
     override fun plan(operation: DaemonOperation): ExecutionPlan {
         return when (operation) {
+            is CreateInterface -> operation.executionPlanOf(
+                // macOS utun interfaces require a kernel control socket (SYSPROTO_CONTROL).
+                // Shell-based creation is not possible; the actual handle is opened natively.
+                // Return an empty plan; DaemonProcessApiImpl opens packet handle lazily in packetIO().
+            )
+
             is InterfaceExists -> operation.executionPlanOf(
                 executionStep(
                     binary = CommandBinary.IFCONFIG,

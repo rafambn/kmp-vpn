@@ -4,11 +4,12 @@ import com.rafambn.kmpvpn.daemon.protocol.response.ApplyAddressesResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyDnsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyMtuResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyRoutesResponse
+import com.rafambn.kmpvpn.daemon.protocol.response.CreateInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.DeleteInterfaceResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.InterfaceExistsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.PingResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ReadInterfaceInformationResponse
-import com.rafambn.kmpvpn.daemon.protocol.response.SetInterfaceStateResponse
+import kotlinx.coroutines.flow.Flow
 import kotlinx.rpc.annotations.Rpc
 
 /**
@@ -16,19 +17,21 @@ import kotlinx.rpc.annotations.Rpc
  *
  * Commands are intentionally split into dedicated RPC methods.
  * Primitive parameters are preferred, except for high-cardinality commands.
+ *
+ * Interface up/down is implicit: the daemon brings the interface up when the
+ * packet stream connects and down when it disconnects.
  */
 @Rpc
 interface DaemonProcessApi {
     suspend fun ping(): CommandResult<PingResponse>
 
+    suspend fun createInterface(
+        interfaceName: String,
+    ): CommandResult<CreateInterfaceResponse>
+
     suspend fun interfaceExists(
         interfaceName: String,
     ): CommandResult<InterfaceExistsResponse>
-
-    suspend fun setInterfaceState(
-        interfaceName: String,
-        up: Boolean,
-    ): CommandResult<SetInterfaceStateResponse>
 
     suspend fun applyMtu(
         interfaceName: String,
@@ -57,4 +60,9 @@ interface DaemonProcessApi {
     suspend fun deleteInterface(
         interfaceName: String,
     ): CommandResult<DeleteInterfaceResponse>
+
+    fun packetIO(
+        interfaceName: String,
+        outgoingPackets: Flow<ByteArray>,
+    ): Flow<ByteArray>
 }

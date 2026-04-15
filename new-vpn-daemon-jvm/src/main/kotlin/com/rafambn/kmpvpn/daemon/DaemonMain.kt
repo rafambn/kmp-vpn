@@ -8,7 +8,6 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.rafambn.kmpvpn.daemon.di.DaemonKoinBootstrap
-import com.rafambn.kmpvpn.daemon.planner.PlatformOperationPlanner
 import com.rafambn.kmpvpn.daemon.protocol.DAEMON_RPC_PATH
 import com.rafambn.kmpvpn.daemon.protocol.DEFAULT_DAEMON_HOST
 import com.rafambn.kmpvpn.daemon.protocol.DEFAULT_DAEMON_PORT
@@ -22,9 +21,10 @@ import io.ktor.server.websocket.WebSockets
 import com.sun.security.auth.module.UnixSystem
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.rpc.krpc.ktor.server.Krpc
 import kotlinx.rpc.krpc.ktor.server.rpc
-import kotlinx.rpc.krpc.serialization.json.json
+import kotlinx.rpc.krpc.serialization.protobuf.protobuf
 
 fun main(args: Array<String>) {
     DaemonCli().main(args)
@@ -164,14 +164,14 @@ internal fun isBinaryAvailableOnPath(executable: String): Boolean {
     return runCommandSuccessfully(lookupCommand)
 }
 
+@OptIn(ExperimentalSerializationApi::class)
 fun Application.module(
     service: DaemonProcessApi = DaemonProcessApiImpl(),
 ) {
     install(WebSockets)
     install(Krpc) {
         serialization {
-            // TODO(vpn-rebuild): migrate kRPC serialization to Protobuf once protocol models are stable and annotated with @ProtoNumber.
-            json()
+            protobuf()
         }
     }
 
@@ -179,8 +179,7 @@ fun Application.module(
         rpc(DAEMON_RPC_PATH) {
             rpcConfig {
                 serialization {
-                    // TODO(vpn-rebuild): migrate kRPC serialization to Protobuf once protocol models are stable and annotated with @ProtoNumber.
-                    json()
+                    protobuf()
                 }
             }
             registerService<DaemonProcessApi> {

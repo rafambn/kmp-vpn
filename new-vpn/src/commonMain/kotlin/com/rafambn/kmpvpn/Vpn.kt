@@ -3,28 +3,43 @@ package com.rafambn.kmpvpn
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.PlatformInterfaceFactory
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
-import com.rafambn.kmpvpn.session.TunnelManagerImpl
-import com.rafambn.kmpvpn.session.TunnelManager
+import com.rafambn.kmpvpn.session.CryptoSessionManager
+import com.rafambn.kmpvpn.session.CryptoSessionManagerImpl
+import com.rafambn.kmpvpn.session.DuplexChannelPipe
+import com.rafambn.kmpvpn.session.SocketManager
+import com.rafambn.kmpvpn.session.SocketManagerImpl
+import com.rafambn.kmpvpn.session.io.UdpDatagram
 
 /**
  * Core orchestrator facade for VPN lifecycle operations.
  *
  * Manages the full lifecycle of a VPN interface (create, start, stop, delete)
- * while delegating peer-session and interface concerns to [TunnelManager] and [InterfaceManager].
+ * while delegating peer-session and interface concerns to [CryptoSessionManager],
+ * [SocketManager], and [InterfaceManager].
+ *
+ * Owns both duplex channel pipes: one for TUN/crypto cleartext exchange (tunPipePair),
+ * one for socket/crypto network exchange (networkPipePair). Distributes the appropriate
+ * ends to each manager.
  */
-class Vpn internal constructor(
-    private var vpnConfiguration: VpnConfiguration,
-    private val tunnelManager: TunnelManager,
-    private val interfaceManager: InterfaceManager,
+class Vpn(
+    configuration: VpnConfiguration,
+    engine: Engine = Engine.BORINGTUN,
+    cryptoSessionManager: CryptoSessionManager? = null,
+    socketManager: SocketManager? = null,
+    interfaceManager: InterfaceManager? = null,
 ) : AutoCloseable {
-    constructor(
-        configuration: VpnConfiguration,
-        engine: Engine = Engine.BORINGTUN,
-    ) : this(
-        vpnConfiguration = configuration,
-        tunnelManager = TunnelManagerImpl(engine = engine),
-        interfaceManager = PlatformInterfaceFactory.create(configuration),
-    )
+
+    companion object {
+        const val DEFAULT_PORT: Int = 51820
+    }
+
+    private val tunPipePair = DuplexChannelPipe.create<ByteArray>()
+    private val networkPipePair = DuplexChannelPipe.create<UdpDatagram>()
+
+    private var vpnConfiguration = configuration
+    private val cryptoSessionManager = cryptoSessionManager ?: CryptoSessionManagerImpl(engine = engine)
+    private val socketManager = socketManager ?: SocketManagerImpl()
+    private val interfaceManager = interfaceManager ?: PlatformInterfaceFactory.create(configuration, tunPipePair.first)
 
     init {
         requireValidConfiguration(vpnConfiguration)
@@ -63,7 +78,7 @@ class Vpn internal constructor(
             return false
         }
 
-        return tunnelManager.hasActiveSessions()
+        return cryptoSessionManager.hasActiveSessions()
     }
 
     /**
@@ -75,7 +90,7 @@ class Vpn internal constructor(
         }
 
         sessionOperation("reconcileSessions") {
-            tunnelManager.reconcileSessions(interfaceManager.configuration())
+            cryptoSessionManager.reconcileSessions(interfaceManager.configuration())
         }
 
         return interfaceManager
@@ -101,25 +116,22 @@ class Vpn internal constructor(
         }
 
         sessionOperation("reconcileSessions") {
-            tunnelManager.reconcileSessions(currentConfiguration)
+            cryptoSessionManager.reconcileSessions(currentConfiguration)
         }
 
-        try {
-            interfaceOperation("up") { managedInterface.up() }
-        } catch (throwable: IllegalStateException) {
-            runBestEffort { tunnelManager.closeAll() }
-            throw throwable
+        sessionOperation("start") {
+            cryptoSessionManager.start(tunPipePair.second, networkPipePair.second) { stop() }
         }
 
-        try {
-            sessionOperation("startDataPlane") {
-                tunnelManager.startDataPlane(configuration = currentConfiguration)
-            }
-        } catch (throwable: IllegalStateException) {
-            runBestEffort { managedInterface.down() }
-            runBestEffort { tunnelManager.closeAll() }
-            throw throwable
+        sessionOperation("socketStart") {
+            socketManager.start(
+                listenPort = currentConfiguration.listenPort ?: DEFAULT_PORT,
+                networkPipe = networkPipePair.first,
+                onFailure = { stop() },
+            )
         }
+
+        interfaceOperation("up") { managedInterface.up { stop() } }
 
         return managedInterface
     }
@@ -128,26 +140,23 @@ class Vpn internal constructor(
      * Stops the interface. This operation is idempotent.
      */
     fun stop() {
-        sessionOperation("closeAll") {
-            tunnelManager.closeAll()
-        }
-
-        interfaceOperation("down") {
-            interfaceManager.down()
-        }
+        runCleanupSequence(
+            { interfaceOperation("down") { interfaceManager.down() } },
+            { sessionOperation("socketStop") { socketManager.stop() } },
+            { sessionOperation("stop") { cryptoSessionManager.stop() } },
+        )
     }
 
     /**
      * Deletes the interface. This operation is idempotent.
      */
     fun delete() {
-        sessionOperation("closeAll") {
-            tunnelManager.closeAll()
-        }
-
-        interfaceOperation("delete") {
-            interfaceManager.delete()
-        }
+        runCleanupSequence(
+            { interfaceOperation("down") { interfaceManager.down() } },
+            { sessionOperation("socketStop") { socketManager.stop() } },
+            { sessionOperation("stop") { cryptoSessionManager.stop() } },
+            { interfaceOperation("delete") { interfaceManager.delete() } },
+        )
     }
 
     /**
@@ -175,7 +184,7 @@ class Vpn internal constructor(
             listenPort = currentDefinedConfiguration.listenPort,
         )
 
-        val runtimePeerStats = tunnelManager.peerStats()
+        val runtimePeerStats = cryptoSessionManager.peerStats()
         val informationWithPeerStats = if (runtimePeerStats.isEmpty()) {
             liveInformation
         } else {
@@ -194,6 +203,8 @@ class Vpn internal constructor(
             "Cannot reconfigure interface `${vpnConfiguration.interfaceName}` using `${config.interfaceName}`"
         }
 
+        val previousListenPort = vpnConfiguration.listenPort ?: DEFAULT_PORT
+
         interfaceOperation("reconfigure") {
             interfaceManager.reconfigure(config)
         }
@@ -201,12 +212,16 @@ class Vpn internal constructor(
         vpnConfiguration = config
 
         sessionOperation("reconcileSessions") {
-            tunnelManager.reconcileSessions(interfaceManager.configuration())
+            cryptoSessionManager.reconcileSessions(interfaceManager.configuration())
         }
 
         if (interfaceManager.isUp()) {
-            sessionOperation("startDataPlane") {
-                tunnelManager.startDataPlane(configuration = interfaceManager.configuration())
+            val newListenPort = config.listenPort ?: DEFAULT_PORT
+            if (previousListenPort != newListenPort) {
+                sessionOperation("socketRestart") {
+                    socketManager.stop()
+                    socketManager.start(newListenPort, networkPipePair.first, { stop() })
+                }
             }
         }
     }
@@ -242,7 +257,19 @@ class Vpn internal constructor(
         }
     }
 
-    companion object {
-        const val DEFAULT_PORT: Int = 51820
+    private inline fun runCleanupSequence(vararg operations: () -> Unit) {
+        var firstError: Throwable? = null
+        for (operation in operations) {
+            try {
+                operation()
+            } catch (e: Throwable) {
+                if (firstError == null) {
+                    firstError = e
+                }
+            }
+        }
+        if (firstError != null) {
+            throw firstError
+        }
     }
 }

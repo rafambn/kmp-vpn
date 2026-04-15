@@ -1,18 +1,25 @@
 package com.rafambn.kmpvpn.iface
 
+import com.rafambn.kmpvpn.session.DuplexChannelPipe
+
 /**
- * Non-privileged JVM command executor used by tests.
+ * Non-privileged JVM command executor used by tests and in-memory mode.
+ *
+ * [openPacketBridge] returns a no-op handle so that control-plane tests can call
+ * [InterfaceManager.up] and [InterfaceManager.down] without a real daemon. The
+ * JVM-side pipe end is left open but idle, so [CryptoSessionManager] workers
+ * suspend indefinitely on receive; they continue running until the manager's own
+ * scope is cancelled via [CryptoSessionManager.stop].
  */
 class InMemoryInterfaceCommandExecutor : InterfaceCommandExecutor {
     private val interfaces: LinkedHashMap<String, InterfaceState> = linkedMapOf()
 
-    override fun interfaceExists(interfaceName: String): Boolean {
-        return interfaces.contains(interfaceName)
+    override fun createInterface(interfaceName: String) {
+        stateFor(interfaceName)
     }
 
-    override fun setInterfaceUp(interfaceName: String, up: Boolean) {
-        val state = stateFor(interfaceName)
-        state.isUp = up
+    override fun interfaceExists(interfaceName: String): Boolean {
+        return interfaces.contains(interfaceName)
     }
 
     override fun applyMtu(interfaceName: String, mtu: Int) {
@@ -50,6 +57,18 @@ class InMemoryInterfaceCommandExecutor : InterfaceCommandExecutor {
 
     override fun deleteInterface(interfaceName: String) {
         interfaces.remove(interfaceName)
+    }
+
+    override fun openPacketBridge(
+        interfaceName: String,
+        pipe: DuplexChannelPipe<ByteArray>,
+        onFailure: (Throwable) -> Unit,
+    ): AutoCloseable {
+        // In-memory mode: mark interface up when bridge opens, down when closed.
+        // Pipe channels stay open but idle; no actual packets flow.
+        val state = stateFor(interfaceName)
+        state.isUp = true
+        return AutoCloseable { state.isUp = false }
     }
 
     fun setPeerStats(interfaceName: String, peerStats: List<VpnPeerStats>) {

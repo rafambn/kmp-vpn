@@ -1,10 +1,14 @@
 package com.rafambn.kmpvpn.iface
 
 import com.rafambn.kmpvpn.VpnConfiguration
+import com.rafambn.kmpvpn.session.DuplexChannelPipe
+
 /**
  * Contract for platform-facing VPN interface ownership.
  *
  * This contract owns both interface lifecycle and interface runtime configuration.
+ * Caller provides the cleartext packet pipe to use for exchanging raw IP packets
+ * with the platform TUN device via [com.rafambn.kmpvpn.session.CryptoSessionManager].
  */
 interface InterfaceManager {
 
@@ -19,12 +23,13 @@ interface InterfaceManager {
     fun create(config: VpnConfiguration)
 
     /**
-     * Brings the interface up.
+     * Brings the interface up, opening the packet bridge to the daemon TUN device.
+     * [onBridgeFailure] is called if the underlying packet bridge fails asynchronously.
      */
-    fun up()
+    fun up(onBridgeFailure: (Throwable) -> Unit = {})
 
     /**
-     * Brings the interface down.
+     * Brings the interface down, closing the packet bridge.
      */
     fun down()
 

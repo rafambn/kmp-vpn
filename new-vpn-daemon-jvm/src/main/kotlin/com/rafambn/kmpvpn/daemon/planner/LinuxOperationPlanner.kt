@@ -11,6 +11,14 @@ internal class LinuxOperationPlanner : PlatformOperationPlanner {
 
     override fun plan(operation: DaemonOperation): ExecutionPlan {
         return when (operation) {
+            is CreateInterface -> operation.executionPlanOf(
+                executionStep(
+                    binary = CommandBinary.IP,
+                    arguments = listOf("tuntap", "add", "dev", operation.interfaceName, "mode", "tun"),
+                    acceptedExitCodes = setOf(0),
+                ),
+            )
+
             is InterfaceExists -> operation.executionPlanOf(
                 executionStep(
                     binary = CommandBinary.IP,

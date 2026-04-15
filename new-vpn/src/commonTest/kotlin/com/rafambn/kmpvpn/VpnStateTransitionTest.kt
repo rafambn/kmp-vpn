@@ -2,7 +2,12 @@ package com.rafambn.kmpvpn
 
 import com.rafambn.kmpvpn.iface.InterfaceManager
 import com.rafambn.kmpvpn.iface.VpnInterfaceInformation
-import com.rafambn.kmpvpn.session.TunnelManagerImpl
+import com.rafambn.kmpvpn.iface.VpnPeerStats
+import com.rafambn.kmpvpn.session.CryptoSessionManager
+import com.rafambn.kmpvpn.session.CryptoSessionManagerImpl
+import com.rafambn.kmpvpn.session.DuplexChannelPipe
+import com.rafambn.kmpvpn.session.SocketManager
+import com.rafambn.kmpvpn.session.io.UdpDatagram
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -46,9 +51,8 @@ class VpnStateTransitionTest {
 
     @Test
     fun interfaceFailureDoesNotPersistSyntheticState() {
-        val vpn = Vpn(
-            vpnConfiguration = baseConfiguration(interfaceName = "utun132"),
-            tunnelManager = TunnelManagerImpl(),
+        val vpn = testVpn(
+            configuration = baseConfiguration(interfaceName = "utun132"),
             interfaceManager = FailingUpInterfaceManager(),
         )
 
@@ -63,9 +67,8 @@ class VpnStateTransitionTest {
     fun startSkipsCreateWhenInterfaceAlreadyExists() {
         val configuration = baseConfiguration(interfaceName = "utun133")
         val interfaceManager = ExistingInterfaceManager(configuration)
-        val vpn = Vpn(
-            vpnConfiguration = configuration,
-            tunnelManager = TunnelManagerImpl(),
+        val vpn = testVpn(
+            configuration = configuration,
             interfaceManager = interfaceManager,
         )
 
@@ -73,6 +76,48 @@ class VpnStateTransitionTest {
 
         assertTrue(interfaceManager.isUp())
         assertEquals(VpnState.Running, vpn.state())
+    }
+
+    @Test
+    fun stopContinuesCleanupWhenDownFails() {
+        val configuration = baseConfiguration(interfaceName = "utun134")
+        val socketManager = RecordingSocketManager()
+        val cryptoSessionManager = RecordingCryptoSessionManager()
+        val vpn = testVpn(
+            configuration = configuration,
+            cryptoSessionManager = cryptoSessionManager,
+            socketManager = socketManager,
+            interfaceManager = DownFailingInterfaceManager(configuration),
+        )
+
+        assertFailsWith<IllegalStateException> {
+            vpn.stop()
+        }
+
+        assertEquals(1, socketManager.stopCalls)
+        assertEquals(1, cryptoSessionManager.stopCalls)
+    }
+
+    @Test
+    fun deleteContinuesCleanupAndDeleteWhenDownFails() {
+        val configuration = baseConfiguration(interfaceName = "utun135")
+        val socketManager = RecordingSocketManager()
+        val cryptoSessionManager = RecordingCryptoSessionManager()
+        val interfaceManager = DownFailingInterfaceManager(configuration)
+        val vpn = testVpn(
+            configuration = configuration,
+            cryptoSessionManager = cryptoSessionManager,
+            socketManager = socketManager,
+            interfaceManager = interfaceManager,
+        )
+
+        assertFailsWith<IllegalStateException> {
+            vpn.delete()
+        }
+
+        assertEquals(1, socketManager.stopCalls)
+        assertEquals(1, cryptoSessionManager.stopCalls)
+        assertEquals(1, interfaceManager.deleteCalls)
     }
 
     private fun baseConfiguration(interfaceName: String): VpnConfiguration {
@@ -84,7 +129,9 @@ class VpnStateTransitionTest {
         )
     }
 
-    private class FailingUpInterfaceManager : InterfaceManager {
+    private class FailingUpInterfaceManager(
+        private val tunPipe: DuplexChannelPipe<ByteArray> = DuplexChannelPipe.create<ByteArray>().first,
+    ) : InterfaceManager {
         private var created: Boolean = false
         private var currentConfiguration: VpnConfiguration? = null
 
@@ -95,7 +142,7 @@ class VpnStateTransitionTest {
             currentConfiguration = config
         }
 
-        override fun up() {
+        override fun up(onBridgeFailure: (Throwable) -> Unit) {
             error("boom")
         }
 
@@ -132,6 +179,7 @@ class VpnStateTransitionTest {
 
     private class ExistingInterfaceManager(
         private var currentConfiguration: VpnConfiguration,
+        private val tunPipe: DuplexChannelPipe<ByteArray> = DuplexChannelPipe.create<ByteArray>().first,
     ) : InterfaceManager {
         private var up: Boolean = false
 
@@ -141,7 +189,7 @@ class VpnStateTransitionTest {
             error("create should not be called when the interface already exists")
         }
 
-        override fun up() {
+        override fun up(onBridgeFailure: (Throwable) -> Unit) {
             up = true
         }
 
@@ -171,5 +219,77 @@ class VpnStateTransitionTest {
                 listenPort = currentConfiguration.listenPort,
             )
         }
+    }
+
+    private class DownFailingInterfaceManager(
+        private var currentConfiguration: VpnConfiguration,
+        private val tunPipe: DuplexChannelPipe<ByteArray> = DuplexChannelPipe.create<ByteArray>().first,
+    ) : InterfaceManager {
+        var deleteCalls: Int = 0
+            private set
+
+        override fun exists(): Boolean = true
+        override fun create(config: VpnConfiguration) {}
+        override fun up(onBridgeFailure: (Throwable) -> Unit) {}
+
+        override fun down() {
+            error("down failed")
+        }
+
+        override fun delete() {
+            deleteCalls++
+        }
+
+        override fun isUp(): Boolean = false
+        override fun configuration(): VpnConfiguration = currentConfiguration
+
+        override fun reconfigure(config: VpnConfiguration) {
+            currentConfiguration = config
+        }
+
+        override fun readInformation(): VpnInterfaceInformation {
+            return VpnInterfaceInformation(
+                interfaceName = currentConfiguration.interfaceName,
+                isUp = false,
+                addresses = currentConfiguration.addresses,
+                dnsDomainPool = currentConfiguration.dnsDomainPool,
+                mtu = currentConfiguration.mtu,
+                listenPort = currentConfiguration.listenPort,
+            )
+        }
+    }
+
+    private class RecordingSocketManager : SocketManager {
+        var stopCalls: Int = 0
+            private set
+
+        override fun start(listenPort: Int, networkPipe: DuplexChannelPipe<UdpDatagram>, onFailure: (Throwable) -> Unit) {}
+
+        override fun stop() {
+            stopCalls++
+        }
+
+        override fun isRunning(): Boolean = false
+    }
+
+    private class RecordingCryptoSessionManager : CryptoSessionManager {
+        var stopCalls: Int = 0
+            private set
+
+        override fun reconcileSessions(config: VpnConfiguration) {}
+
+        override fun start(
+            tunPipe: DuplexChannelPipe<ByteArray>,
+            networkPipe: DuplexChannelPipe<UdpDatagram>,
+            onFailure: (Throwable) -> Unit,
+        ) {
+        }
+
+        override fun stop() {
+            stopCalls++
+        }
+
+        override fun peerStats(): List<VpnPeerStats> = emptyList()
+        override fun hasActiveSessions(): Boolean = false
     }
 }

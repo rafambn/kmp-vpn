@@ -14,6 +14,8 @@ import com.rafambn.kmpvpn.daemon.protocol.DaemonErrorKind
 import com.rafambn.kmpvpn.daemon.protocol.response.ApplyDnsResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.PingResponse
 import com.rafambn.kmpvpn.daemon.protocol.response.ReadInterfaceInformationResponse
+import com.rafambn.kmpvpn.daemon.tun.TunHandle
+import com.rafambn.kmpvpn.daemon.tun.TunHandleFactory
 import java.time.Duration
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -146,7 +148,7 @@ class DaemonProcessApiSmokeTest {
     fun launcherStartFailureReturnsTypedFailure() = runBlocking {
         val response = daemonApi(
             launcher = StartFailingLauncher(),
-        ).setInterfaceState(interfaceName = "utun0", up = false)
+        ).applyMtu(interfaceName = "utun0", mtu = 1420)
 
         val failure = response as CommandResult.Failure
         assertEquals(DaemonErrorKind.PROCESS_START_FAILURE, failure.kind)
@@ -158,7 +160,7 @@ class DaemonProcessApiSmokeTest {
     fun launcherTimeoutReturnsTypedFailure() = runBlocking {
         val response = daemonApi(
             launcher = TimeoutFailingLauncher(),
-        ).setInterfaceState(interfaceName = "utun0", up = false)
+        ).applyMtu(interfaceName = "utun0", mtu = 1420)
 
         val failure = response as CommandResult.Failure
         assertEquals(DaemonErrorKind.PROCESS_TIMEOUT, failure.kind)
@@ -180,7 +182,7 @@ class DaemonProcessApiSmokeTest {
                     ),
                 ),
             ),
-        ).setInterfaceState(interfaceName = "utun0", up = false)
+        ).applyMtu(interfaceName = "utun0", mtu = 1420)
 
         val failure = response as CommandResult.Failure
         assertEquals(DaemonErrorKind.COMMAND_FAILED, failure.kind)
@@ -189,14 +191,61 @@ class DaemonProcessApiSmokeTest {
         assertTrue(failure.message.contains("first line\nsecond line"))
     }
 
+    @Test
+    fun createInterfaceDoesNotOpenTunHandleWhenCreatePlanIsEmpty() = runBlocking {
+        val launcher = RecordingLauncher()
+        val response = daemonApi(
+            launcher = launcher,
+            operationPlanner = WindowsOperationPlanner(),
+            tunHandleFactory = ThrowingTunHandleFactory(),
+        ).createInterface(interfaceName = "utun0")
+
+        assertTrue(response.isSuccess)
+        assertTrue(launcher.invocations.isEmpty())
+    }
+
+    @Test
+    fun createInterfaceDoesNotOpenTunHandleWhenCreatePlanCreatesInterface() = runBlocking {
+        val launcher = RecordingLauncher()
+        val response = daemonApi(
+            launcher = launcher,
+            operationPlanner = LinuxOperationPlanner(),
+            tunHandleFactory = ThrowingTunHandleFactory(),
+        ).createInterface(interfaceName = "utun0")
+
+        assertTrue(response.isSuccess)
+        assertEquals(1, launcher.invocations.size)
+        assertEquals(listOf("tuntap", "add", "dev", "utun0", "mode", "tun"), launcher.invocations.single().arguments)
+    }
+
     private fun daemonApi(
         launcher: ProcessLauncher,
         operationPlanner: PlatformOperationPlanner = LinuxOperationPlanner(),
+        tunHandleFactory: TunHandleFactory = TunHandleFactory { interfaceName ->
+            StubTunHandleForSmokeTest(interfaceName = interfaceName)
+        },
     ): DaemonProcessApiImpl {
         return DaemonProcessApiImpl(
             operationPlanner = operationPlanner,
             processLauncher = launcher,
+            tunHandleFactory = tunHandleFactory,
         )
+    }
+
+    private class ThrowingTunHandleFactory : TunHandleFactory {
+        override fun open(interfaceName: String): TunHandle {
+            error("Unexpected TUN handle open for $interfaceName")
+        }
+    }
+
+    private class StubTunHandleForSmokeTest(
+        override val interfaceName: String,
+    ) : TunHandle {
+        override suspend fun readPacket(): ByteArray? = null
+
+        override suspend fun writePacket(packet: ByteArray) = Unit
+
+        override fun close() = Unit
     }
 
     private class RecordingLauncher(
