@@ -2,24 +2,21 @@ package com.rafambn.wgkotlin.daemon
 
 import com.rafambn.wgkotlin.daemon.command.CommandBinary
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
-import com.rafambn.wgkotlin.daemon.protocol.CommandResult
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
+import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import com.rafambn.wgkotlin.daemon.tun.TunHandle
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class DaemonApplicationSmokeTest {
 
     @Test
     fun pingReturnsSuccess() = runBlocking {
         val api = DaemonProcessApiImpl(adapter = RecordingAdapter())
-        assertTrue(api.ping().isSuccess)
-        assertEquals(PingResponse, (api.ping() as CommandResult.Success<PingResponse>).data)
+        assertEquals(PingResponse, api.ping())
     }
 
     @Test

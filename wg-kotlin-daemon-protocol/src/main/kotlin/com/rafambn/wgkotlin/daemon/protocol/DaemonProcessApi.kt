@@ -1,6 +1,5 @@
 package com.rafambn.wgkotlin.daemon.protocol
 
-import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.rpc.annotations.Rpc
 
@@ -15,7 +14,7 @@ import kotlinx.rpc.annotations.Rpc
  */
 @Rpc
 interface DaemonProcessApi {
-    suspend fun ping(): CommandResult<PingResponse>
+    suspend fun ping(): PingResponse
 
     fun startSession(
         config: TunSessionConfig,

@@ -1,12 +1,10 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.CommandResult
 import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
-import com.rafambn.wgkotlin.daemon.protocol.DaemonErrorKind
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
+import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import io.ktor.server.application.install
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
@@ -40,7 +38,7 @@ class DaemonClientSmokeTest {
         val engine = startServer(
             port = port,
             service = object : StubDaemonProcessApi() {
-                override suspend fun ping(): CommandResult<PingResponse> = success(PingResponse)
+                override suspend fun ping(): PingResponse = PingResponse
 
                 override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> {
                     assertEquals("utun55", config.interfaceName)
@@ -53,7 +51,7 @@ class DaemonClientSmokeTest {
         val client = DaemonProcessClient.create(config = DaemonClientConfig(port = port))
 
         try {
-            assertTrue(client.handshake().isSuccess)
+            assertEquals(PingResponse, client.handshake())
 
             val packets: List<ByteArray> = client.startSession(
                 config = TunSessionConfig(
@@ -77,9 +75,9 @@ class DaemonClientSmokeTest {
         val engine = startServer(
             port = port,
             service = object : StubDaemonProcessApi() {
-                override suspend fun ping(): CommandResult<PingResponse> {
+                override suspend fun ping(): PingResponse {
                     delay(300)
-                    return success(PingResponse)
+                    return PingResponse
                 }
             },
         )
@@ -105,7 +103,7 @@ class DaemonClientSmokeTest {
     @Test
     fun globalBootstrapSupportsOverridesAndMultipleClientConfigs() = runBlocking {
         val stubService = object : StubDaemonProcessApi() {
-            override suspend fun ping(): CommandResult<PingResponse> = success(PingResponse)
+            override suspend fun ping(): PingResponse = PingResponse
         }
         val overrideModule = module {
             factory<DaemonProcessApi> { stubService }
@@ -121,8 +119,8 @@ class DaemonClientSmokeTest {
         )
 
         try {
-            assertTrue(first.ping().isSuccess)
-            assertTrue(second.ping().isSuccess)
+            assertEquals(PingResponse, first.ping())
+            assertEquals(PingResponse, second.ping())
         } finally {
             first.close()
             second.close()
@@ -130,19 +128,16 @@ class DaemonClientSmokeTest {
     }
 
     @Test
-    fun handshakeRejectsRemoteFailure() = runBlocking {
+    fun handshakePropagatesRemoteException() = runBlocking {
         val client = DaemonProcessClient(
             service = object : StubDaemonProcessApi() {
-                override suspend fun ping(): CommandResult<PingResponse> {
-                    return CommandResult.failure(
-                        kind = DaemonErrorKind.INTERNAL_ERROR,
-                        message = "nope",
-                    )
+                override suspend fun ping(): PingResponse {
+                    throw IllegalStateException("nope")
                 }
             },
         )
 
-        val failure = assertFailsWith<DaemonClientException.ProtocolViolation> {
+        val failure = assertFailsWith<IllegalStateException> {
             client.handshake()
         }
 
@@ -178,14 +173,9 @@ class DaemonClientSmokeTest {
         return engine
     }
 
-    private fun <S> success(data: S): CommandResult<S> = CommandResult.success(data = data)
-
     private open class StubDaemonProcessApi : DaemonProcessApi {
-        override suspend fun ping(): CommandResult<PingResponse> {
-            return CommandResult.failure(
-                kind = DaemonErrorKind.UNKNOWN_COMMAND,
-                message = "Unsupported command `PING`",
-            )
+        override suspend fun ping(): PingResponse {
+            return PingResponse
         }
 
         override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> = emptyFlow()

@@ -1,10 +1,9 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.CommandResult
 import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_HOST
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
+import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import java.time.Duration
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -35,19 +34,11 @@ class DaemonProcessClient(
         }
     }
 
-    suspend fun handshake(timeout: Duration = Duration.ofSeconds(5)): CommandResult<PingResponse> {
-        val response = callWithTimeout(timeout) { service.ping() }
-
-        if (response is CommandResult.Failure) {
-            throw DaemonClientException.ProtocolViolation(
-                message = "Handshake failed: ${response.message}",
-            )
-        }
-
-        return response
+    suspend fun handshake(timeout: Duration = Duration.ofSeconds(5)): PingResponse {
+        return callWithTimeout(timeout) { service.ping() }
     }
 
-    override suspend fun ping(): CommandResult<PingResponse> {
+    override suspend fun ping(): PingResponse {
         return callWithTimeout(timeout) { service.ping() }
     }
 
@@ -60,8 +51,8 @@ class DaemonProcessClient(
 
     private suspend fun <D> callWithTimeout(
         timeout: Duration,
-        call: suspend () -> CommandResult<D>,
-    ): CommandResult<D> {
+        call: suspend () -> D,
+    ): D {
         if (timeout.toMillis() <= 0L) {
             throw IllegalArgumentException("Timeout must be positive")
         }

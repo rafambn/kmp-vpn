@@ -1,15 +1,10 @@
 package com.rafambn.wgkotlin.daemon
 
-import com.rafambn.wgkotlin.daemon.command.CommandFailed
-import com.rafambn.wgkotlin.daemon.command.StartFailure
-import com.rafambn.wgkotlin.daemon.command.TimeoutFailure
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapterFactory
-import com.rafambn.wgkotlin.daemon.protocol.CommandResult
-import com.rafambn.wgkotlin.daemon.protocol.DaemonErrorKind
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -24,8 +19,8 @@ class DaemonProcessApiImpl internal constructor(
     private val activeSessionLock = Any()
     private val activeSessions = mutableSetOf<String>()
 
-    override suspend fun ping(): CommandResult<PingResponse> {
-        return CommandResult.success(PingResponse)
+    override suspend fun ping(): PingResponse {
+        return PingResponse
     }
 
     override fun startSession(
@@ -77,41 +72,6 @@ class DaemonProcessApiImpl internal constructor(
             synchronized(activeSessionLock) {
                 activeSessions.remove(config.interfaceName)
             }
-        }
-    }
-
-    private fun <S> toFailureResult(
-        commandType: String,
-        failure: Throwable,
-    ): CommandResult<S> {
-        return when (failure) {
-            is PayloadValidationException -> CommandResult.failure(
-                kind = DaemonErrorKind.VALIDATION_ERROR,
-                message = failure.message ?: "Invalid payload",
-            )
-
-            is StartFailure -> CommandResult.failure(
-                kind = DaemonErrorKind.PROCESS_START_FAILURE,
-                message = failure.message ?: "Failed to start privileged process",
-                detail = com.rafambn.wgkotlin.daemon.protocol.DaemonFailureDetail(executable = failure.executable),
-            )
-
-            is TimeoutFailure -> CommandResult.failure(
-                kind = DaemonErrorKind.PROCESS_TIMEOUT,
-                message = failure.message ?: "Privileged process timed out",
-                detail = com.rafambn.wgkotlin.daemon.protocol.DaemonFailureDetail(executable = failure.executable),
-            )
-
-            is CommandFailed -> CommandResult.failure(
-                kind = DaemonErrorKind.COMMAND_FAILED,
-                message = failure.message ?: "Privileged command failed",
-                detail = failure.detail,
-            )
-
-            else -> CommandResult.failure(
-                kind = DaemonErrorKind.INTERNAL_ERROR,
-                message = "Unexpected daemon failure in `$commandType`: ${failure.message ?: "unknown"}",
-            )
         }
     }
 }

@@ -48,26 +48,6 @@ class DaemonProtocolSmokeTest {
     }
 
     @Test
-    fun failureResultRoundTripPreservesErrorPayload() {
-        val original = CommandResult.failure<Unit>(
-            kind = DaemonErrorKind.COMMAND_FAILED,
-            message = "invalid route",
-            detail = DaemonFailureDetail(
-                executable = "ip",
-                exitCode = 2,
-            ),
-        )
-
-        val encoded = protoBuf.encodeToByteArray(original)
-        val decoded = protoBuf.decodeFromByteArray<CommandResult<Unit>>(encoded) as CommandResult.Failure
-
-        assertEquals(DaemonErrorKind.COMMAND_FAILED, decoded.kind)
-        assertEquals("invalid route", decoded.message)
-        assertEquals("ip", decoded.detail?.executable)
-        assertEquals(2, decoded.detail?.exitCode)
-    }
-
-    @Test
     fun deserializationRejectsMalformedCommandShape() {
         val malformed = byteArrayOf(0x0A)
 
@@ -92,6 +72,15 @@ class DaemonProtocolSmokeTest {
 
         assertTrue(returnTypeName.contains("Flow"))
         assertFalse(returnTypeName.contains("CommandResult"))
+    }
+
+    @Test
+    fun pingReturnsDirectPingResponse() {
+        val function = DaemonProcessApi::class.java.declaredMethods.single { method -> method.name == "ping" }
+        val continuationTypeName = function.genericParameterTypes.single().typeName
+
+        assertTrue(continuationTypeName.contains("PingResponse"))
+        assertFalse(continuationTypeName.contains("CommandResult"))
     }
 
     @Test

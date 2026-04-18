@@ -52,7 +52,6 @@ internal abstract class BasePlatformAdapter(
         if (output.exitCode !in acceptedExitCodes) {
             throw CommandFailed(
                 operationLabel = operationLabel,
-                executable = binary.executable,
                 exitCode = output.exitCode,
                 stdout = output.stdout,
                 stderr = output.stderr,

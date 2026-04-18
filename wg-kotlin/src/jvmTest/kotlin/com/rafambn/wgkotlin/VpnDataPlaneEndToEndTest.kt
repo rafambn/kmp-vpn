@@ -1,12 +1,11 @@
 package com.rafambn.wgkotlin
 
 import com.rafambn.wgkotlin.daemon.client.DaemonProcessClient
-import com.rafambn.wgkotlin.daemon.protocol.CommandResult
 import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.daemonRpcUrl
-import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
+import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.WebSockets
@@ -52,7 +51,7 @@ class VpnDataPlaneEndToEndTest {
                     }
                     registerService<DaemonProcessApi> {
                         object : DaemonProcessApi {
-                            override suspend fun ping(): CommandResult<PingResponse> = CommandResult.success(PingResponse)
+                            override suspend fun ping(): PingResponse = PingResponse
                             override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> = flowOf(byteArrayOf(4, 5, 6))
                         }
                     }

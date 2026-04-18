@@ -1,6 +1,5 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.CommandResult
 import java.time.Duration
 
 sealed class DaemonClientException(
@@ -18,10 +17,4 @@ sealed class DaemonClientException(
     class ProtocolViolation(
         message: String,
     ) : DaemonClientException(message = message)
-
-    class RemoteFailure(
-        val failure: CommandResult.Failure,
-    ) : DaemonClientException(
-        message = "Daemon returned failure kind=${failure.kind}: ${failure.message}",
-    )
 }
