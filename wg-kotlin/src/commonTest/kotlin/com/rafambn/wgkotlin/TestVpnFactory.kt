@@ -6,7 +6,6 @@ import com.rafambn.wgkotlin.session.CryptoSessionManager
 import com.rafambn.wgkotlin.session.DuplexChannelPipe
 import com.rafambn.wgkotlin.session.SocketManager
 import com.rafambn.wgkotlin.session.io.UdpDatagram
-import com.rafambn.wgkotlin.session.io.UdpEndpoint
 
 internal fun testVpn(
     configuration: VpnConfiguration,
@@ -40,54 +39,41 @@ internal class MockSocketManager : SocketManager {
 internal class MockInterfaceManager(
     private var currentConfiguration: VpnConfiguration,
 ) : InterfaceManager {
-    var createCalls: Int = 0
-    var upCalls: Int = 0
-    var downCalls: Int = 0
-    var deleteCalls: Int = 0
+    var startCalls: Int = 0
+    var stopCalls: Int = 0
     var reconfigureCalls: Int = 0
 
-    private var created: Boolean = false
-    private var up: Boolean = false
+    private var running: Boolean = false
 
-    override fun exists(): Boolean = created
+    override fun isRunning(): Boolean = running
 
-    override fun create(config: VpnConfiguration) {
-        createCalls++
-        created = true
+    override fun start(config: VpnConfiguration, onFailure: (Throwable) -> Unit) {
+        startCalls++
+        running = true
         currentConfiguration = snapshotConfiguration(config)
     }
 
-    override fun up(onBridgeFailure: (Throwable) -> Unit) {
-        upCalls++
-        up = true
+    override fun stop() {
+        stopCalls++
+        running = false
     }
-
-    override fun down() {
-        downCalls++
-        up = false
-    }
-
-    override fun delete() {
-        deleteCalls++
-        created = false
-        up = false
-    }
-
-    override fun isUp(): Boolean = up
-
-    override fun configuration(): VpnConfiguration = snapshotConfiguration(currentConfiguration)
 
     override fun reconfigure(config: VpnConfiguration) {
         reconfigureCalls++
         currentConfiguration = snapshotConfiguration(config)
+        running = true
     }
 
-    override fun readInformation(): VpnInterfaceInformation {
+    override fun information(): VpnInterfaceInformation? {
+        if (!running) {
+            return null
+        }
+
         return VpnInterfaceInformation(
             interfaceName = currentConfiguration.interfaceName,
-            isUp = up,
-            addresses = currentConfiguration.addresses,
-            dnsDomainPool = currentConfiguration.dnsDomainPool,
+            isUp = true,
+            addresses = currentConfiguration.addresses.toList(),
+            dns = currentConfiguration.dns,
             mtu = currentConfiguration.mtu,
             listenPort = currentConfiguration.listenPort,
         )
@@ -97,7 +83,10 @@ internal class MockInterfaceManager(
 internal fun snapshotConfiguration(config: VpnConfiguration): VpnConfiguration {
     return VpnConfiguration(
         interfaceName = config.interfaceName,
-        dnsDomainPool = config.dnsDomainPool.first.toList() to config.dnsDomainPool.second.toList(),
+        dns = DnsConfig(
+            searchDomains = config.dns.searchDomains.toList(),
+            servers = config.dns.servers.toList(),
+        ),
         mtu = config.mtu,
         addresses = config.addresses.toMutableList(),
         listenPort = config.listenPort,

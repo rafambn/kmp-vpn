@@ -4,14 +4,12 @@ import com.rafambn.wgkotlin.iface.InterfaceManager
 import com.rafambn.wgkotlin.iface.VpnInterfaceInformation
 import com.rafambn.wgkotlin.iface.VpnPeerStats
 import com.rafambn.wgkotlin.session.CryptoSessionManager
-import com.rafambn.wgkotlin.session.CryptoSessionManagerImpl
 import com.rafambn.wgkotlin.session.DuplexChannelPipe
 import com.rafambn.wgkotlin.session.SocketManager
 import com.rafambn.wgkotlin.session.io.UdpDatagram
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class VpnStateTransitionTest {
 
@@ -22,72 +20,39 @@ class VpnStateTransitionTest {
     fun lifecycleTransitionsFollowContract() {
         val vpn = testVpn(configuration = baseConfiguration(interfaceName = "utun130"))
 
-        assertEquals(VpnState.NotCreated, vpn.state())
-
-        vpn.create()
-        assertEquals(VpnState.Created, vpn.state())
+        assertEquals(VpnState.Stopped, vpn.state())
 
         vpn.start()
         assertEquals(VpnState.Running, vpn.state())
 
         vpn.stop()
-        assertEquals(VpnState.Created, vpn.state())
-
-        vpn.delete()
-        assertEquals(VpnState.NotCreated, vpn.state())
+        assertEquals(VpnState.Stopped, vpn.state())
     }
 
     @Test
-    fun stopAndDeleteAreIdempotent() {
-        val vpn = testVpn(configuration = baseConfiguration(interfaceName = "utun131"))
-
-        vpn.stop()
-        assertEquals(VpnState.NotCreated, vpn.state())
-
-        vpn.delete()
-        vpn.delete()
-        assertEquals(VpnState.NotCreated, vpn.state())
-    }
-
-    @Test
-    fun interfaceFailureDoesNotPersistSyntheticState() {
+    fun failedStartLeavesVpnStopped() {
         val vpn = testVpn(
-            configuration = baseConfiguration(interfaceName = "utun132"),
-            interfaceManager = FailingUpInterfaceManager(),
+            configuration = baseConfiguration(interfaceName = "utun131"),
+            interfaceManager = FailingStartInterfaceManager(),
         )
 
         assertFailsWith<IllegalStateException> {
             vpn.start()
         }
 
-        assertEquals(VpnState.Created, vpn.state())
+        assertEquals(VpnState.Stopped, vpn.state())
     }
 
     @Test
-    fun startSkipsCreateWhenInterfaceAlreadyExists() {
-        val configuration = baseConfiguration(interfaceName = "utun133")
-        val interfaceManager = ExistingInterfaceManager(configuration)
-        val vpn = testVpn(
-            configuration = configuration,
-            interfaceManager = interfaceManager,
-        )
-
-        vpn.start()
-
-        assertTrue(interfaceManager.isUp())
-        assertEquals(VpnState.Running, vpn.state())
-    }
-
-    @Test
-    fun stopContinuesCleanupWhenDownFails() {
-        val configuration = baseConfiguration(interfaceName = "utun134")
+    fun stopContinuesCleanupWhenInterfaceStopFails() {
+        val configuration = baseConfiguration(interfaceName = "utun132")
         val socketManager = RecordingSocketManager()
         val cryptoSessionManager = RecordingCryptoSessionManager()
         val vpn = testVpn(
             configuration = configuration,
             cryptoSessionManager = cryptoSessionManager,
             socketManager = socketManager,
-            interfaceManager = DownFailingInterfaceManager(configuration),
+            interfaceManager = StopFailingInterfaceManager(configuration),
         )
 
         assertFailsWith<IllegalStateException> {
@@ -96,28 +61,6 @@ class VpnStateTransitionTest {
 
         assertEquals(1, socketManager.stopCalls)
         assertEquals(1, cryptoSessionManager.stopCalls)
-    }
-
-    @Test
-    fun deleteContinuesCleanupAndDeleteWhenDownFails() {
-        val configuration = baseConfiguration(interfaceName = "utun135")
-        val socketManager = RecordingSocketManager()
-        val cryptoSessionManager = RecordingCryptoSessionManager()
-        val interfaceManager = DownFailingInterfaceManager(configuration)
-        val vpn = testVpn(
-            configuration = configuration,
-            cryptoSessionManager = cryptoSessionManager,
-            socketManager = socketManager,
-            interfaceManager = interfaceManager,
-        )
-
-        assertFailsWith<IllegalStateException> {
-            vpn.delete()
-        }
-
-        assertEquals(1, socketManager.stopCalls)
-        assertEquals(1, cryptoSessionManager.stopCalls)
-        assertEquals(1, interfaceManager.deleteCalls)
     }
 
     private fun baseConfiguration(interfaceName: String): VpnConfiguration {
@@ -129,130 +72,39 @@ class VpnStateTransitionTest {
         )
     }
 
-    private class FailingUpInterfaceManager(
-        private val tunPipe: DuplexChannelPipe<ByteArray> = DuplexChannelPipe.create<ByteArray>().first,
-    ) : InterfaceManager {
-        private var created: Boolean = false
-        private var currentConfiguration: VpnConfiguration? = null
+    private class FailingStartInterfaceManager : InterfaceManager {
+        override fun isRunning(): Boolean = false
 
-        override fun exists(): Boolean = created
-
-        override fun create(config: VpnConfiguration) {
-            created = true
-            currentConfiguration = config
-        }
-
-        override fun up(onBridgeFailure: (Throwable) -> Unit) {
+        override fun start(config: VpnConfiguration, onFailure: (Throwable) -> Unit) {
             error("boom")
         }
 
-        override fun down() {
-            // no-op
-        }
+        override fun stop() {}
 
-        override fun delete() {
-            created = false
-            currentConfiguration = null
-        }
+        override fun reconfigure(config: VpnConfiguration) {}
 
-        override fun isUp(): Boolean = false
-
-        override fun configuration(): VpnConfiguration {
-            return checkNotNull(currentConfiguration)
-        }
-
-        override fun reconfigure(config: VpnConfiguration) {
-            currentConfiguration = config
-        }
-
-        override fun readInformation(): VpnInterfaceInformation {
-            return VpnInterfaceInformation(
-                interfaceName = "utun132",
-                isUp = false,
-                addresses = emptyList(),
-                dnsDomainPool = (emptyList<String>() to emptyList()),
-                mtu = null,
-                listenPort = null,
-            )
-        }
+        override fun information(): VpnInterfaceInformation? = null
     }
 
-    private class ExistingInterfaceManager(
-        private var currentConfiguration: VpnConfiguration,
-        private val tunPipe: DuplexChannelPipe<ByteArray> = DuplexChannelPipe.create<ByteArray>().first,
+    private class StopFailingInterfaceManager(
+        private val currentConfiguration: VpnConfiguration,
     ) : InterfaceManager {
-        private var up: Boolean = false
+        override fun isRunning(): Boolean = false
 
-        override fun exists(): Boolean = true
+        override fun start(config: VpnConfiguration, onFailure: (Throwable) -> Unit) {}
 
-        override fun create(config: VpnConfiguration) {
-            error("create should not be called when the interface already exists")
+        override fun stop() {
+            error("stop failed")
         }
 
-        override fun up(onBridgeFailure: (Throwable) -> Unit) {
-            up = true
-        }
+        override fun reconfigure(config: VpnConfiguration) {}
 
-        override fun down() {
-            up = false
-        }
-
-        override fun delete() {
-            up = false
-        }
-
-        override fun isUp(): Boolean = up
-
-        override fun configuration(): VpnConfiguration = currentConfiguration
-
-        override fun reconfigure(config: VpnConfiguration) {
-            currentConfiguration = config
-        }
-
-        override fun readInformation(): VpnInterfaceInformation {
-            return VpnInterfaceInformation(
-                interfaceName = currentConfiguration.interfaceName,
-                isUp = up,
-                addresses = currentConfiguration.addresses,
-                dnsDomainPool = currentConfiguration.dnsDomainPool,
-                mtu = currentConfiguration.mtu,
-                listenPort = currentConfiguration.listenPort,
-            )
-        }
-    }
-
-    private class DownFailingInterfaceManager(
-        private var currentConfiguration: VpnConfiguration,
-        private val tunPipe: DuplexChannelPipe<ByteArray> = DuplexChannelPipe.create<ByteArray>().first,
-    ) : InterfaceManager {
-        var deleteCalls: Int = 0
-            private set
-
-        override fun exists(): Boolean = true
-        override fun create(config: VpnConfiguration) {}
-        override fun up(onBridgeFailure: (Throwable) -> Unit) {}
-
-        override fun down() {
-            error("down failed")
-        }
-
-        override fun delete() {
-            deleteCalls++
-        }
-
-        override fun isUp(): Boolean = false
-        override fun configuration(): VpnConfiguration = currentConfiguration
-
-        override fun reconfigure(config: VpnConfiguration) {
-            currentConfiguration = config
-        }
-
-        override fun readInformation(): VpnInterfaceInformation {
+        override fun information(): VpnInterfaceInformation {
             return VpnInterfaceInformation(
                 interfaceName = currentConfiguration.interfaceName,
                 isUp = false,
                 addresses = currentConfiguration.addresses,
-                dnsDomainPool = currentConfiguration.dnsDomainPool,
+                dns = currentConfiguration.dns,
                 mtu = currentConfiguration.mtu,
                 listenPort = currentConfiguration.listenPort,
             )
@@ -261,7 +113,6 @@ class VpnStateTransitionTest {
 
     private class RecordingSocketManager : SocketManager {
         var stopCalls: Int = 0
-            private set
 
         override fun start(listenPort: Int, networkPipe: DuplexChannelPipe<UdpDatagram>, onFailure: (Throwable) -> Unit) {}
 
@@ -274,7 +125,6 @@ class VpnStateTransitionTest {
 
     private class RecordingCryptoSessionManager : CryptoSessionManager {
         var stopCalls: Int = 0
-            private set
 
         override fun reconcileSessions(config: VpnConfiguration) {}
 
@@ -282,14 +132,14 @@ class VpnStateTransitionTest {
             tunPipe: DuplexChannelPipe<ByteArray>,
             networkPipe: DuplexChannelPipe<UdpDatagram>,
             onFailure: (Throwable) -> Unit,
-        ) {
-        }
+        ) {}
 
         override fun stop() {
             stopCalls++
         }
 
-        override fun peerStats(): List<VpnPeerStats> = emptyList()
         override fun hasActiveSessions(): Boolean = false
+
+        override fun peerStats(): List<VpnPeerStats> = emptyList()
     }
 }

@@ -2,8 +2,7 @@ package com.rafambn.wgkotlin
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 class VpnFoundationWiringTest {
 
@@ -17,39 +16,34 @@ class VpnFoundationWiringTest {
             configuration = VpnConfiguration(
                 interfaceName = "utun120",
                 privateKey = privateKey,
-                peers = listOf(VpnPeer(publicKey = peerKey, endpointAddress = "198.51.100.1", endpointPort = 51820))
-            )
+                peers = listOf(VpnPeer(publicKey = peerKey, endpointAddress = "198.51.100.1", endpointPort = 51820)),
+            ),
         )
 
-        assertFalse(vpn.exists())
-
-        vpn.create()
-        assertTrue(vpn.exists())
+        assertEquals(VpnState.Stopped, vpn.state())
 
         vpn.start()
-        assertTrue(vpn.isRunning())
+        assertEquals(VpnState.Running, vpn.state())
 
         vpn.stop()
-        assertFalse(vpn.isRunning())
-
-        vpn.delete()
-        assertFalse(vpn.exists())
+        assertEquals(VpnState.Stopped, vpn.state())
+        assertNull(vpn.information())
     }
 
     @Test
-    fun createRemainsIdempotent() {
+    fun repeatedStartKeepsVpnRunning() {
         val vpn = testVpn(
             configuration = VpnConfiguration(
                 interfaceName = "utun121",
                 privateKey = privateKey,
-                peers = listOf(VpnPeer(publicKey = peerKey, endpointAddress = "198.51.100.1", endpointPort = 51820))
-            )
+                peers = listOf(VpnPeer(publicKey = peerKey, endpointAddress = "198.51.100.1", endpointPort = 51820)),
+            ),
         )
 
-        val first = vpn.create()
-        val second = vpn.create()
+        vpn.start()
+        vpn.start()
 
-        assertTrue(first === second)
+        assertEquals(VpnState.Running, vpn.state())
     }
 
     @Test
@@ -57,7 +51,7 @@ class VpnFoundationWiringTest {
         val vpn = testVpn(
             configuration = VpnConfiguration(
                 interfaceName = "utun122",
-                dnsDomainPool = (listOf("corp.local") to listOf("1.1.1.1")),
+                dns = DnsConfig(searchDomains = listOf("corp.local"), servers = listOf("1.1.1.1")),
                 privateKey = privateKey,
                 peers = listOf(VpnPeer(publicKey = peerKey, endpointAddress = "198.51.100.1", endpointPort = 51820)),
             ),
@@ -68,7 +62,7 @@ class VpnFoundationWiringTest {
         vpn.reconfigure(
             VpnConfiguration(
                 interfaceName = "utun122",
-                dnsDomainPool = (listOf("corp.local") to listOf("9.9.9.9")),
+                dns = DnsConfig(searchDomains = listOf("corp.local"), servers = listOf("9.9.9.9")),
                 addresses = mutableListOf("10.20.30.2/32"),
                 privateKey = privateKey,
                 peers = listOf(VpnPeer(publicKey = publicKey, endpointAddress = "198.51.100.2", endpointPort = 51821)),
@@ -78,7 +72,7 @@ class VpnFoundationWiringTest {
         val current = requireNotNull(vpn.information()).vpnConfiguration
         requireNotNull(current)
 
-        assertEquals(listOf("corp.local") to listOf("9.9.9.9"), current.dnsDomainPool)
+        assertEquals(DnsConfig(searchDomains = listOf("corp.local"), servers = listOf("9.9.9.9")), current.dns)
         assertEquals(listOf("10.20.30.2/32"), current.addresses)
         assertEquals(listOf(publicKey), current.peers.map { peer -> peer.publicKey })
     }

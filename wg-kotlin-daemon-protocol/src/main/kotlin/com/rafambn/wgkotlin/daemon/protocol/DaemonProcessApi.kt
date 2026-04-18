@@ -1,14 +1,6 @@
 package com.rafambn.wgkotlin.daemon.protocol
 
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyAddressesResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyDnsResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyMtuResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyRoutesResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.CreateInterfaceResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.DeleteInterfaceResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.InterfaceExistsResponse
 import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ReadInterfaceInformationResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.rpc.annotations.Rpc
 
@@ -25,44 +17,8 @@ import kotlinx.rpc.annotations.Rpc
 interface DaemonProcessApi {
     suspend fun ping(): CommandResult<PingResponse>
 
-    suspend fun createInterface(
-        interfaceName: String,
-    ): CommandResult<CreateInterfaceResponse>
-
-    suspend fun interfaceExists(
-        interfaceName: String,
-    ): CommandResult<InterfaceExistsResponse>
-
-    suspend fun applyMtu(
-        interfaceName: String,
-        mtu: Int,
-    ): CommandResult<ApplyMtuResponse>
-
-    suspend fun applyAddresses(
-        interfaceName: String,
-        addresses: List<String>,
-    ): CommandResult<ApplyAddressesResponse>
-
-    suspend fun applyRoutes(
-        interfaceName: String,
-        routes: List<String>,
-    ): CommandResult<ApplyRoutesResponse>
-
-    suspend fun applyDns(
-        interfaceName: String,
-        dnsDomainPool: Pair<List<String>, List<String>>,
-    ): CommandResult<ApplyDnsResponse>
-
-    suspend fun readInterfaceInformation(
-        interfaceName: String,
-    ): CommandResult<ReadInterfaceInformationResponse>
-
-    suspend fun deleteInterface(
-        interfaceName: String,
-    ): CommandResult<DeleteInterfaceResponse>
-
-    fun packetIO(
-        interfaceName: String,
+    fun startSession(
+        config: TunSessionConfig,
         outgoingPackets: Flow<ByteArray>,
     ): Flow<ByteArray>
 }

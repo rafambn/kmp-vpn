@@ -1,0 +1,105 @@
+package com.rafambn.wgkotlin.daemon.planner
+
+import com.rafambn.wgkotlin.daemon.command.CommandBinary
+import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
+import com.rafambn.wgkotlin.daemon.tun.RealTunHandleFactory
+import com.rafambn.wgkotlin.daemon.tun.TunHandle
+
+internal class MacOsPlatformAdapter(
+    processLauncher: ProcessLauncher,
+) : BasePlatformAdapter(processLauncher) {
+    override val platformId: String = "macos"
+    override val requiredBinaries: Set<CommandBinary> = setOf(
+        CommandBinary.IFCONFIG,
+        CommandBinary.ROUTE,
+        CommandBinary.SCUTIL,
+    )
+
+    override suspend fun startSession(config: TunSessionConfig): TunHandle {
+        val handle = RealTunHandleFactory.fromConfig(config).open(config.interfaceName)
+        val interfaceName = handle.interfaceName
+
+        config.mtu?.let { mtu ->
+            runCommand(
+                operationLabel = "apply-mtu",
+                binary = CommandBinary.IFCONFIG,
+                arguments = listOf(interfaceName, "mtu", mtu.toString()),
+            )
+        }
+
+        config.addresses.forEach { address ->
+            val arguments = if (address.substringBefore("/").contains(":")) {
+                listOf(interfaceName, "inet6", address, "add")
+            } else {
+                listOf(interfaceName, "inet", address, "alias")
+            }
+            runCommand(
+                operationLabel = "add-address",
+                binary = CommandBinary.IFCONFIG,
+                arguments = arguments,
+            )
+        }
+
+        config.routes.forEach { route ->
+            runCommand(
+                operationLabel = "delete-route",
+                binary = CommandBinary.ROUTE,
+                arguments = listOf("-n", "delete", "-net", route, "-interface", interfaceName),
+                acceptedExitCodes = setOf(0, 1),
+            )
+            runCommand(
+                operationLabel = "add-route",
+                binary = CommandBinary.ROUTE,
+                arguments = listOf("-n", "add", "-net", route, "-interface", interfaceName),
+            )
+        }
+
+        val resolverPath = "State:/Network/Service/$interfaceName/DNS"
+        val resolverRootPath = "State:/Network/Service/$interfaceName"
+        val dnsServers = config.dns.servers
+            .map { server -> server.trim() }
+            .filter { server -> server.isNotBlank() }
+            .distinct()
+        val domains = config.dns.searchDomains
+            .map { domain -> domain.trim().removePrefix(".") }
+            .filter { domain -> domain.isNotBlank() }
+            .distinct()
+
+        runCommand(
+            operationLabel = "clear-dns",
+            binary = CommandBinary.SCUTIL,
+            stdin = buildString {
+                appendLine("remove $resolverPath")
+                appendLine("remove $resolverRootPath")
+                appendLine("quit")
+            },
+        )
+
+        if (domains.isNotEmpty() && dnsServers.isNotEmpty()) {
+            runCommand(
+                operationLabel = "set-dns",
+                binary = CommandBinary.SCUTIL,
+                stdin = buildString {
+                    appendLine("d.init")
+                    appendLine("d.add ServerAddresses ${dnsServers.joinToString(" ")}")
+                    appendLine("d.add SupplementalMatchDomains ${domains.joinToString(" ")}")
+                    appendLine("set $resolverPath")
+                    appendLine("quit")
+                },
+            )
+            runCommand(
+                operationLabel = "set-dns-root",
+                binary = CommandBinary.SCUTIL,
+                stdin = buildString {
+                    appendLine("d.init")
+                    appendLine("d.add UserDefinedName $interfaceName")
+                    appendLine("set $resolverRootPath")
+                    appendLine("quit")
+                },
+            )
+        }
+
+        return handle
+    }
+}

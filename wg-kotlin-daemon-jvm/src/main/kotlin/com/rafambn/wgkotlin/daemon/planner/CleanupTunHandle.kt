@@ -1,0 +1,29 @@
+package com.rafambn.wgkotlin.daemon.planner
+
+import com.rafambn.wgkotlin.daemon.tun.TunHandle
+
+internal class CleanupTunHandle(
+    private val delegate: TunHandle,
+    private val cleanup: () -> Unit,
+) : TunHandle by delegate {
+    override fun close() {
+        var failure: Throwable? = null
+        try {
+            delegate.close()
+        } catch (throwable: Throwable) {
+            failure = throwable
+        }
+
+        try {
+            cleanup()
+        } catch (throwable: Throwable) {
+            if (failure == null) {
+                failure = throwable
+            }
+        }
+
+        if (failure != null) {
+            throw failure
+        }
+    }
+}

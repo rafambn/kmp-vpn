@@ -198,13 +198,9 @@ impl TunDevice {
     }
 
     pub fn open(&self, ipv4_addr: String, prefix_len: u8) -> Result<(), TunError> {
-        let mut device_builder = tun_rs::DeviceBuilder::new();
-
-        // Set IPv4 configuration
-        device_builder = device_builder.ipv4(ipv4_addr, prefix_len, None);
-
-        // Build sync device (blocking)
-        let device = device_builder
+        let device = tun_rs::DeviceBuilder::new()
+            .name(self.interface_name.clone())
+            .ipv4(ipv4_addr, prefix_len, None)
             .build_sync()
             .map_err(|e: std::io::Error| TunError::DeviceCreationFailed(e.to_string()))?;
 
@@ -245,7 +241,11 @@ impl TunDevice {
     }
 
     pub fn get_interface_name(&self) -> String {
-        self.interface_name.clone()
+        self.device
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().and_then(|device| device.name().ok()))
+            .unwrap_or_else(|| self.interface_name.clone())
     }
 
     pub fn shutdown(&self) -> Result<(), TunError> {

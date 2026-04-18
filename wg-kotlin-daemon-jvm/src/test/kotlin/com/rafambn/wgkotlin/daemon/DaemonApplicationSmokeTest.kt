@@ -1,284 +1,67 @@
 package com.rafambn.wgkotlin.daemon
 
 import com.rafambn.wgkotlin.daemon.command.CommandBinary
-import com.rafambn.wgkotlin.daemon.command.ProcessInvocationModel
-import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
-import com.rafambn.wgkotlin.daemon.command.ProcessOutputModel
-import com.rafambn.wgkotlin.daemon.command.StartFailure
-import com.rafambn.wgkotlin.daemon.command.TimeoutFailure
-import com.rafambn.wgkotlin.daemon.planner.LinuxOperationPlanner
-import com.rafambn.wgkotlin.daemon.planner.PlatformOperationPlanner
-import com.rafambn.wgkotlin.daemon.planner.WindowsOperationPlanner
+import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
 import com.rafambn.wgkotlin.daemon.protocol.CommandResult
-import com.rafambn.wgkotlin.daemon.protocol.DaemonErrorKind
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyDnsResponse
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ReadInterfaceInformationResponse
 import com.rafambn.wgkotlin.daemon.tun.TunHandle
-import com.rafambn.wgkotlin.daemon.tun.TunHandleFactory
-import java.time.Duration
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class DaemonProcessApiSmokeTest {
+class DaemonApplicationSmokeTest {
 
     @Test
     fun pingReturnsSuccess() = runBlocking {
-        val response = daemonApi(
-            launcher = RecordingLauncher(),
-        ).ping()
-
-        assertTrue(response.isSuccess)
-        assertEquals(PingResponse, (response as CommandResult.Success).data)
+        val api = DaemonProcessApiImpl(adapter = RecordingAdapter())
+        assertTrue(api.ping().isSuccess)
+        assertEquals(PingResponse, (api.ping() as CommandResult.Success<PingResponse>).data)
     }
 
     @Test
-    fun applyMtuUsesAllowlistedCommand() = runBlocking {
-        val launcher = RecordingLauncher()
-        val response = daemonApi(
-            launcher = launcher,
-        ).applyMtu(interfaceName = "utun0", mtu = 1420)
+    fun startSessionStreamsPacketsAndClosesHandle() = runBlocking {
+        val adapter = RecordingAdapter()
+        val api = DaemonProcessApiImpl(adapter = adapter)
 
-        assertTrue(response.isSuccess)
-        assertEquals(
-            1420,
-            (response as CommandResult.Success).data.mtu,
-            "Unexpected MTU returned from daemon response",
-        )
+        val packet = api.startSession(
+            config = TunSessionConfig(interfaceName = "wg0", addresses = listOf("10.0.0.1/24")),
+            outgoingPackets = emptyFlow(),
+        ).first()
 
-        assertEquals(1, launcher.invocations.size)
-        assertEquals(CommandBinary.IP, launcher.invocations.single().binary)
-        assertEquals(
-            listOf("link", "set", "dev", "utun0", "mtu", "1420"),
-            launcher.invocations.single().arguments,
-        )
+        assertEquals("1, 2, 3", packet.joinToString())
+        assertEquals(1, adapter.startCalls)
+        assertEquals(1, adapter.handle.closeCalls)
     }
 
-    @Test
-    fun invalidPayloadFailsBeforeExecution() = runBlocking {
-        val launcher = RecordingLauncher()
-        val response = daemonApi(
-            launcher = launcher,
-        ).applyMtu(
-            interfaceName = "wg invalid",
-            mtu = 1500,
-        )
+    private class RecordingAdapter : PlatformAdapter {
+        val handle = RecordingHandle()
+        var startCalls: Int = 0
+        override val platformId: String = "test"
+        override val requiredBinaries: Set<CommandBinary> = emptySet()
 
-        val failure = response as CommandResult.Failure
-        assertEquals(DaemonErrorKind.VALIDATION_ERROR, failure.kind)
-        assertTrue(failure.message.isNotBlank())
-        assertTrue(launcher.invocations.isEmpty())
-    }
-
-    @Test
-    fun interfaceExistsTreatsNonZeroExitAsNotFound() = runBlocking {
-        val launcher = RecordingLauncher(
-            outputs = ArrayDeque(
-                listOf(
-                    ProcessOutputModel(
-                        exitCode = 1,
-                        stdout = "",
-                        stderr = "Device does not exist",
-                    ),
-                ),
-            ),
-        )
-        val response = daemonApi(
-            launcher = launcher,
-        ).interfaceExists(interfaceName = "utun9")
-
-        assertTrue(response.isSuccess)
-        val payload = (response as CommandResult.Success).data
-        assertFalse(payload.exists)
-        assertEquals("utun9", payload.interfaceName)
-    }
-
-    @Test
-    fun readInterfaceInformationParsesLinuxDumpIntoStructuredPayload() = runBlocking {
-        val launcher = RecordingLauncher(
-            outputs = ArrayDeque(
-                listOf(
-                    ProcessOutputModel(
-                        exitCode = 0,
-                        stdout = """
-                            7: utun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1420 qdisc fq_codel state UNKNOWN mode DEFAULT group default qlen 500
-                                link/none
-                                inet 10.20.30.40/32 scope global utun0
-                        """.trimIndent(),
-                        stderr = "",
-                    ),
-                ),
-            ),
-        )
-
-        val response = daemonApi(
-            launcher = launcher,
-        ).readInterfaceInformation(interfaceName = "utun0")
-
-        val success = response as CommandResult.Success<ReadInterfaceInformationResponse>
-        assertEquals("utun0", success.data.interfaceName)
-        assertTrue(success.data.isUp)
-        assertEquals(1420, success.data.mtu)
-        assertEquals(listOf("10.20.30.40/32"), success.data.addresses)
-        assertEquals(listOf("-details", "address", "show", "dev", "utun0"), launcher.invocations.single().arguments)
-    }
-
-    @Test
-    fun windowsApplyDnsUsesPowershellNrptCommands() = runBlocking {
-        val launcher = RecordingLauncher()
-        val response = daemonApi(
-            launcher = launcher,
-            operationPlanner = WindowsOperationPlanner(),
-        ).applyDns(
-            interfaceName = "utun0",
-            dnsDomainPool = (listOf("corp.local") to listOf("1.1.1.1")),
-        )
-
-        val success = response as CommandResult.Success<ApplyDnsResponse>
-        assertEquals("utun0", success.data.interfaceName)
-        assertEquals(2, launcher.invocations.size)
-        assertEquals(CommandBinary.POWERSHELL, launcher.invocations.first().binary)
-        assertTrue(launcher.invocations.last().arguments.last().contains("Add-DnsClientNrptRule"))
-    }
-
-    @Test
-    fun launcherStartFailureReturnsTypedFailure() = runBlocking {
-        val response = daemonApi(
-            launcher = StartFailingLauncher(),
-        ).applyMtu(interfaceName = "utun0", mtu = 1420)
-
-        val failure = response as CommandResult.Failure
-        assertEquals(DaemonErrorKind.PROCESS_START_FAILURE, failure.kind)
-        assertEquals("ip", failure.detail?.executable)
-        assertTrue(failure.message.contains("Failed to start"))
-    }
-
-    @Test
-    fun launcherTimeoutReturnsTypedFailure() = runBlocking {
-        val response = daemonApi(
-            launcher = TimeoutFailingLauncher(),
-        ).applyMtu(interfaceName = "utun0", mtu = 1420)
-
-        val failure = response as CommandResult.Failure
-        assertEquals(DaemonErrorKind.PROCESS_TIMEOUT, failure.kind)
-        assertEquals("ip", failure.detail?.executable)
-        assertTrue(failure.message.contains("250ms"))
-    }
-
-    @Test
-    fun nonAcceptedExitCodeReturnsCommandFailedWithFullOutput() = runBlocking {
-        val response = daemonApi(
-            launcher = RecordingLauncher(
-                outputs = ArrayDeque(
-                    listOf(
-                        ProcessOutputModel(
-                            exitCode = 5,
-                            stdout = "",
-                            stderr = "first line\nsecond line",
-                        ),
-                    ),
-                ),
-            ),
-        ).applyMtu(interfaceName = "utun0", mtu = 1420)
-
-        val failure = response as CommandResult.Failure
-        assertEquals(DaemonErrorKind.COMMAND_FAILED, failure.kind)
-        assertEquals("ip", failure.detail?.executable)
-        assertEquals(5, failure.detail?.exitCode)
-        assertTrue(failure.message.contains("first line\nsecond line"))
-    }
-
-    @Test
-    fun createInterfaceDoesNotOpenTunHandleWhenCreatePlanIsEmpty() = runBlocking {
-        val launcher = RecordingLauncher()
-        val response = daemonApi(
-            launcher = launcher,
-            operationPlanner = WindowsOperationPlanner(),
-            tunHandleFactory = ThrowingTunHandleFactory(),
-        ).createInterface(interfaceName = "utun0")
-
-        assertTrue(response.isSuccess)
-        assertTrue(launcher.invocations.isEmpty())
-    }
-
-    @Test
-    fun createInterfaceDoesNotOpenTunHandleWhenCreatePlanCreatesInterface() = runBlocking {
-        val launcher = RecordingLauncher()
-        val response = daemonApi(
-            launcher = launcher,
-            operationPlanner = LinuxOperationPlanner(),
-            tunHandleFactory = ThrowingTunHandleFactory(),
-        ).createInterface(interfaceName = "utun0")
-
-        assertTrue(response.isSuccess)
-        assertEquals(1, launcher.invocations.size)
-        assertEquals(listOf("tuntap", "add", "dev", "utun0", "mode", "tun"), launcher.invocations.single().arguments)
-    }
-
-    private fun daemonApi(
-        launcher: ProcessLauncher,
-        operationPlanner: PlatformOperationPlanner = LinuxOperationPlanner(),
-        tunHandleFactory: TunHandleFactory = TunHandleFactory { interfaceName ->
-            StubTunHandleForSmokeTest(interfaceName = interfaceName)
-        },
-    ): DaemonProcessApiImpl {
-        return DaemonProcessApiImpl(
-            operationPlanner = operationPlanner,
-            processLauncher = launcher,
-            tunHandleFactory = tunHandleFactory,
-        )
-    }
-
-    private class ThrowingTunHandleFactory : TunHandleFactory {
-        override fun open(interfaceName: String): TunHandle {
-            error("Unexpected TUN handle open for $interfaceName")
+        override suspend fun startSession(config: TunSessionConfig): TunHandle {
+            startCalls++
+            return handle
         }
     }
 
-    private class StubTunHandleForSmokeTest(
-        override val interfaceName: String,
-    ) : TunHandle {
-        override suspend fun readPacket(): ByteArray? = null
+    private class RecordingHandle : TunHandle {
+        override val interfaceName: String = "wg0"
+        var closeCalls: Int = 0
+        private var emitted = false
 
-        override suspend fun writePacket(packet: ByteArray) = Unit
-
-        override fun close() = Unit
-    }
-
-    private class RecordingLauncher(
-        private val outputs: ArrayDeque<ProcessOutputModel> = ArrayDeque(),
-    ) : ProcessLauncher {
-        val invocations: MutableList<ProcessInvocationModel> = mutableListOf()
-
-        override fun run(invocation: ProcessInvocationModel): ProcessOutputModel {
-            invocations += invocation
-            return outputs.removeFirstOrNull() ?: ProcessOutputModel(
-                exitCode = 0,
-                stdout = "",
-                stderr = "",
-            )
+        override suspend fun readPacket(): ByteArray? {
+            return if (emitted) { kotlinx.coroutines.delay(10); null } else byteArrayOf(1, 2, 3).also { emitted = true }
         }
-    }
 
-    private class StartFailingLauncher : ProcessLauncher {
-        override fun run(invocation: ProcessInvocationModel): ProcessOutputModel {
-            throw StartFailure(
-                executable = invocation.binary.executable,
-                message = "Failed to start `${invocation.binary.executable}`",
-            )
-        }
-    }
+        override suspend fun writePacket(packet: ByteArray) {}
 
-    private class TimeoutFailingLauncher : ProcessLauncher {
-        override fun run(invocation: ProcessInvocationModel): ProcessOutputModel {
-            throw TimeoutFailure(
-                executable = invocation.binary.executable,
-                timeout = Duration.ofMillis(250),
-                cause = IllegalStateException("launcher exploded"),
-            )
+        override fun close() {
+            closeCalls++
         }
     }
 }

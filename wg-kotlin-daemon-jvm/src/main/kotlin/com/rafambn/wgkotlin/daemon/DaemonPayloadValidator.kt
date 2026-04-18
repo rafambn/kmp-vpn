@@ -1,5 +1,7 @@
 package com.rafambn.wgkotlin.daemon
 
+import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import io.netty.util.NetUtil
 
 internal object DaemonPayloadValidator {
@@ -30,32 +32,40 @@ internal object DaemonPayloadValidator {
         }
     }
 
-    fun validateDnsDomainPool(dnsDomainPool: Pair<List<String>, List<String>>) {
-        val domains = dnsDomainPool.first
+    fun validate(config: TunSessionConfig) {
+        validateInterfaceName(config.interfaceName)
+        validateAddresses(config.addresses)
+        validateRoutes(config.routes)
+        config.mtu?.let(::validateMtu)
+        validateDns(config.dns)
+    }
+
+    fun validateDns(dns: DnsConfig) {
+        val domains = dns.searchDomains
             .map { domain -> domain.trim().removePrefix(".") }
-        val dnsServers = dnsDomainPool.second
+        val dnsServers = dns.servers
             .map { dnsServer -> dnsServer.trim() }
 
-        validateMaxCount(fieldName = "dnsDomainPool.domains", count = domains.size, max = MAX_DNS_DOMAINS)
-        validateMaxCount(fieldName = "dnsDomainPool.dnsServers", count = dnsServers.size, max = MAX_DNS_SERVERS)
+        validateMaxCount(fieldName = "dns.searchDomains", count = domains.size, max = MAX_DNS_DOMAINS)
+        validateMaxCount(fieldName = "dns.servers", count = dnsServers.size, max = MAX_DNS_SERVERS)
 
         if ((domains.isEmpty() && dnsServers.isNotEmpty()) || (domains.isNotEmpty() && dnsServers.isEmpty())) {
-            throw PayloadValidationException("dnsDomainPool must provide both domains and dnsServers, or neither")
+            throw PayloadValidationException("dns must provide both searchDomains and servers, or neither")
         }
 
         domains.forEachIndexed { index, normalizedDomain ->
-            validateMaxLength(fieldName = "dnsDomainPool.domains[$index]", value = normalizedDomain, max = MAX_DOMAIN_LENGTH)
+            validateMaxLength(fieldName = "dns.searchDomains[$index]", value = normalizedDomain, max = MAX_DOMAIN_LENGTH)
             if (normalizedDomain.isBlank() || !HOSTNAME_REGEX.matches(normalizedDomain)) {
-                throw PayloadValidationException("dnsDomainPool.domains[$index] must be a valid hostname")
+                throw PayloadValidationException("dns.searchDomains[$index] must be a valid hostname")
             }
         }
 
         dnsServers.forEachIndexed { index, normalizedDnsServer ->
-            validateMaxLength(fieldName = "dnsDomainPool.dnsServers[$index]", value = normalizedDnsServer, max = MAX_ENDPOINT_LENGTH)
+            validateMaxLength(fieldName = "dns.servers[$index]", value = normalizedDnsServer, max = MAX_ENDPOINT_LENGTH)
             val isValidIpLiteral =
                 NetUtil.isValidIpV4Address(normalizedDnsServer) || NetUtil.isValidIpV6Address(normalizedDnsServer)
             if (!isValidIpLiteral) {
-                throw PayloadValidationException("dnsDomainPool.dnsServers[$index] must be a valid IPv4 or IPv6 address")
+                throw PayloadValidationException("dns.servers[$index] must be a valid IPv4 or IPv6 address")
             }
         }
     }
@@ -107,7 +117,6 @@ internal object DaemonPayloadValidator {
             throw PayloadValidationException("$fieldName must be at most $max characters")
         }
     }
-
 }
 
 internal class PayloadValidationException(

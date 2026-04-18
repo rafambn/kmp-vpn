@@ -1,6 +1,5 @@
 package com.rafambn.wgkotlin.iface
 
-import com.rafambn.wgkotlin.VpnConfiguration
 import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_HOST
 import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_PORT
 import com.rafambn.wgkotlin.session.DuplexChannelPipe
@@ -32,18 +31,12 @@ internal object JvmInterfaceKoinBootstrap {
         }
 
         factory<InterfaceManager> { params ->
-            val configuration = params.get<VpnConfiguration>()
             val tunPipe = params.get<DuplexChannelPipe<ByteArray>>()
-            JvmInterfaceManager(
-                interfaceName = configuration.interfaceName,
-                commandExecutor = get(),
-                tunPipe = tunPipe,
-            )
+            JvmInterfaceManager(commandExecutor = get(), tunPipe = tunPipe)
         }
     }
 
     fun createInterfaceManager(
-        configuration: VpnConfiguration,
         tunPipe: DuplexChannelPipe<ByteArray>,
         overrideModules: List<Module> = emptyList(),
     ): InterfaceManager {
@@ -53,7 +46,7 @@ internal object JvmInterfaceKoinBootstrap {
         }
 
         return try {
-            app.koin.get(parameters = { parametersOf(configuration, tunPipe) })
+            app.koin.get(parameters = { parametersOf(tunPipe) })
         } finally {
             app.close()
         }

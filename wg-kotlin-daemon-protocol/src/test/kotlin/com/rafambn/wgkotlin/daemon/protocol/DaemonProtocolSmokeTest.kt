@@ -1,8 +1,5 @@
 package com.rafambn.wgkotlin.daemon.protocol
 
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyDnsResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.CreateInterfaceResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ReadInterfaceInformationResponse
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.decodeFromByteArray
@@ -11,6 +8,7 @@ import kotlinx.serialization.protobuf.ProtoBuf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalSerializationApi::class)
 class DaemonProtocolSmokeTest {
@@ -18,23 +16,35 @@ class DaemonProtocolSmokeTest {
     private val protoBuf = ProtoBuf
 
     @Test
-    fun applyDnsPayloadRoundTripPreservesTypedFields() {
-        val original = ApplyDnsResponse(
-            interfaceName = "wg0",
-            dnsDomainPool = (
-                listOf("corp.local", "dev.local") to
-                    listOf("1.1.1.1", "9.9.9.9")
-                ),
+    fun dnsConfigRoundTripPreservesTypedFields() {
+        val original = DnsConfig(
+            searchDomains = listOf("corp.local", "dev.local"),
+            servers = listOf("1.1.1.1", "9.9.9.9"),
         )
 
         val encoded = protoBuf.encodeToByteArray(original)
-        val decoded = protoBuf.decodeFromByteArray<ApplyDnsResponse>(encoded)
+        val decoded = protoBuf.decodeFromByteArray<DnsConfig>(encoded)
 
-        assertEquals("wg0", decoded.interfaceName)
-        assertEquals(
-            listOf("corp.local", "dev.local") to listOf("1.1.1.1", "9.9.9.9"),
-            decoded.dnsDomainPool,
+        assertEquals(original, decoded)
+    }
+
+    @Test
+    fun tunSessionConfigRoundTripPreservesStructuredFields() {
+        val original = TunSessionConfig(
+            interfaceName = "utun42",
+            mtu = 1420,
+            addresses = listOf("10.20.30.40/32", "fd00::1/128"),
+            routes = listOf("0.0.0.0/0", "::/0"),
+            dns = DnsConfig(
+                searchDomains = listOf("corp.local"),
+                servers = listOf("1.1.1.1"),
+            ),
         )
+
+        val encoded = protoBuf.encodeToByteArray(original)
+        val decoded = protoBuf.decodeFromByteArray<TunSessionConfig>(encoded)
+
+        assertEquals(original, decoded)
     }
 
     @Test
@@ -62,57 +72,26 @@ class DaemonProtocolSmokeTest {
         val malformed = byteArrayOf(0x0A)
 
         kotlin.test.assertFailsWith<SerializationException> {
-            protoBuf.decodeFromByteArray<ApplyDnsResponse>(malformed)
+            protoBuf.decodeFromByteArray<TunSessionConfig>(malformed)
         }
     }
 
     @Test
-    fun readInterfaceInformationPayloadRoundTripPreservesStructuredData() {
-        val original = ReadInterfaceInformationResponse(
-            interfaceName = "wg0",
-            isUp = true,
-            addresses = listOf("10.20.30.40/32"),
-            dnsDomainPool = (listOf("corp.local") to listOf("1.1.1.1")),
-            mtu = 1420,
-            listenPort = 51820,
-        )
+    fun daemonProcessApiExposesOnlyPingAndStartSession() {
+        val functions = DaemonProcessApi::class.java.declaredMethods
+            .map { method -> method.name }
+            .sorted()
 
-        val encoded = protoBuf.encodeToByteArray(original)
-        val decoded = protoBuf.decodeFromByteArray<ReadInterfaceInformationResponse>(encoded)
-
-        assertEquals("wg0", decoded.interfaceName)
-        assertEquals(true, decoded.isUp)
-        assertEquals(listOf("10.20.30.40/32"), decoded.addresses)
-        assertEquals(listOf("corp.local") to listOf("1.1.1.1"), decoded.dnsDomainPool)
-        assertEquals(1420, decoded.mtu)
-        assertEquals(51820, decoded.listenPort)
+        assertEquals(listOf("ping", "startSession"), functions)
     }
 
     @Test
-    fun protocolTypesRemainControlPlaneOnly() {
-        val typeNames = listOf(
-            "PingResponse",
-            "ApplyDnsResponse",
-            "ApplyRoutesResponse",
-            "ReadInterfaceInformationResponse",
-        )
+    fun startSessionRemainsPacketStreamApi() {
+        val function = DaemonProcessApi::class.java.declaredMethods.single { method -> method.name == "startSession" }
+        val returnTypeName = function.genericReturnType.typeName
 
-        typeNames.forEach { typeName ->
-            val normalized = typeName.lowercase()
-            assertFalse(normalized.contains("packet"), "Type `$typeName` must not carry packet payload")
-            assertFalse(normalized.contains("tun"), "Type `$typeName` must not control runtime packet loop")
-            assertFalse(normalized.contains("udp"), "Type `$typeName` must not control runtime packet loop")
-        }
-    }
-
-    @Test
-    fun createInterfaceResponseRoundTripPreservesInterfaceName() {
-        val original = CreateInterfaceResponse(interfaceName = "utun0")
-
-        val encoded = protoBuf.encodeToByteArray(original)
-        val decoded = protoBuf.decodeFromByteArray<CreateInterfaceResponse>(encoded)
-
-        assertEquals("utun0", decoded.interfaceName)
+        assertTrue(returnTypeName.contains("Flow"))
+        assertFalse(returnTypeName.contains("CommandResult"))
     }
 
     @Test
@@ -120,5 +99,4 @@ class DaemonProtocolSmokeTest {
         assertEquals("ws://[::1]:8787/services", daemonRpcUrl(host = "::1", port = 8787))
         assertEquals("ws://127.0.0.1:8787/services", daemonRpcUrl(host = "127.0.0.1", port = 8787))
     }
-
 }

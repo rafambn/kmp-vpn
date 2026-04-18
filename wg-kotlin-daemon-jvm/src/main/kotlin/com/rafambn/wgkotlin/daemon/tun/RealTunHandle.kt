@@ -11,9 +11,10 @@ import uniffi.wg_kotlin.TunDevice
  * to provide cross-platform TUN device support for Linux, macOS, and Windows.
  */
 internal class RealTunHandle(
-    override val interfaceName: String,
+    private val requestedInterfaceName: String,
     private val ipv4Address: String,
     private val prefixLength: UByte = 24u,
+    private val onClose: () -> Unit = {},
 ) : TunHandle {
 
     private val logger = org.slf4j.LoggerFactory.getLogger(RealTunHandle::class.java)
@@ -21,9 +22,13 @@ internal class RealTunHandle(
     // The actual Rust TUN device via uniffi
     private var tunDevice: TunDevice? = null
     private var isClosed = false
+    private var openedInterfaceName: String = requestedInterfaceName
 
-    suspend fun openDevice() {
-        logger.info("Opening TUN device: $interfaceName with IP $ipv4Address/$prefixLength")
+    override val interfaceName: String
+        get() = openedInterfaceName
+
+    suspend fun openDevice(): RealTunHandle {
+        logger.info("Opening TUN device: $requestedInterfaceName with IP $ipv4Address/$prefixLength")
 
         // Load WinTUN DLL on Windows before attempting to open device
         WindowsDllLoader.loadWinTun()
@@ -31,18 +36,20 @@ internal class RealTunHandle(
         withContext(Dispatchers.IO) {
             try {
                 // Create the TUN device via uniffi bindings
-                tunDevice = TunDevice(interfaceName)
+                tunDevice = TunDevice(requestedInterfaceName)
 
                 // Open the device with the specified IPv4 address
                 tunDevice?.open(ipv4Address, prefixLength)
+                openedInterfaceName = tunDevice?.getInterfaceName() ?: requestedInterfaceName
 
-                logger.info("TUN device opened successfully: $interfaceName")
+                logger.info("TUN device opened successfully: $openedInterfaceName")
             } catch (e: Exception) {
-                logger.error("Failed to open TUN device: $interfaceName", e)
+                logger.error("Failed to open TUN device: $requestedInterfaceName", e)
                 isClosed = true
                 throw e
             }
         }
+        return this
     }
 
     override suspend fun readPacket(): ByteArray? {
@@ -87,9 +94,10 @@ internal class RealTunHandle(
         }
 
         isClosed = true
-        logger.info("Closing TUN device: $interfaceName")
+        logger.info("Closing TUN device: $openedInterfaceName")
 
         try {
+            onClose()
             // Close the Rust TUN device via uniffi
             tunDevice?.close()
             tunDevice = null

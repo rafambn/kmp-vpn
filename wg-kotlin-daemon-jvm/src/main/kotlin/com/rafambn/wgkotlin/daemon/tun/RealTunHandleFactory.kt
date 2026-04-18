@@ -17,15 +17,24 @@ internal class RealTunHandleFactory(
     override fun open(interfaceName: String): TunHandle {
         logger.info("Creating real TUN handle for interface: $interfaceName")
 
-        val handle = RealTunHandle(
-            interfaceName = interfaceName,
+        return RealTunHandle(
+            requestedInterfaceName = interfaceName,
             ipv4Address = ipv4Address,
             prefixLength = prefixLength,
         )
+    }
 
-        // Note: The actual device opening happens in packetIO() after interface
-        // is created by the daemon, as the interface needs to exist first.
+    companion object {
+        fun fromConfig(config: com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig): RealTunHandleFactory {
+            val ipv4Address = config.addresses
+                .map { address -> address.substringBefore("/") to address.substringAfter("/", "") }
+                .firstOrNull { (ip, prefix) -> ip.isNotBlank() && !ip.contains(":") && prefix.isNotBlank() }
+                ?: throw IllegalArgumentException("Tun session requires at least one IPv4 address")
 
-        return handle
+            return RealTunHandleFactory(
+                ipv4Address = ipv4Address.first,
+                prefixLength = ipv4Address.second.toUByte(),
+            )
+        }
     }
 }

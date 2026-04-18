@@ -3,7 +3,8 @@ package com.rafambn.wgkotlin.daemon.di
 import com.rafambn.wgkotlin.daemon.DaemonProcessApiImpl
 import com.rafambn.wgkotlin.daemon.command.CommonsExecProcessLauncher
 import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
-import com.rafambn.wgkotlin.daemon.planner.PlatformOperationPlanner
+import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
+import com.rafambn.wgkotlin.daemon.planner.PlatformAdapterFactory
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import org.koin.core.module.Module
 import org.koin.dsl.koinApplication
@@ -11,13 +12,10 @@ import org.koin.dsl.module
 
 internal object DaemonKoinBootstrap {
     private val baseModule: Module = module {
-        single<PlatformOperationPlanner> { PlatformOperationPlanner.fromOs() }
         single<ProcessLauncher> { CommonsExecProcessLauncher() }
+        single<PlatformAdapter> { PlatformAdapterFactory.fromOs(processLauncher = get()) }
         single<DaemonProcessApi> {
-            DaemonProcessApiImpl(
-                operationPlanner = get(),
-                processLauncher = get(),
-            )
+            DaemonProcessApiImpl(adapter = get())
         }
     }
 
@@ -29,7 +27,7 @@ internal object DaemonKoinBootstrap {
 
         return try {
             DaemonRuntimeDependencies(
-                operationPlanner = app.koin.get(),
+                adapter = app.koin.get(),
                 service = app.koin.get(),
             )
         } finally {
@@ -39,6 +37,6 @@ internal object DaemonKoinBootstrap {
 }
 
 internal data class DaemonRuntimeDependencies(
-    val operationPlanner: PlatformOperationPlanner,
+    val adapter: PlatformAdapter,
     val service: DaemonProcessApi,
 )

@@ -1,27 +1,29 @@
 package com.rafambn.wgkotlin.daemon
 
+import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class DaemonPayloadValidatorTest {
 
     @Test
-    fun validateDnsDomainPoolAcceptsMaxEntries() {
-        val dnsDomainPool = (
-            List(64) { index -> "corp$index.local" } to
-                List(64) { "1.1.1.1" }
-            )
-        DaemonPayloadValidator.validateDnsDomainPool(dnsDomainPool)
+    fun validateDnsAcceptsMaxEntries() {
+        val dns = DnsConfig(
+            searchDomains = List(64) { index -> "corp$index.local" },
+            servers = List(64) { "1.1.1.1" },
+        )
+        DaemonPayloadValidator.validateDns(dns)
     }
 
     @Test
-    fun validateDnsDomainPoolRejectsAboveMaxEntries() {
-        val dnsDomainPool = (
-            List(65) { index -> "corp$index.local" } to
-                listOf("1.1.1.1")
-            )
+    fun validateDnsRejectsAboveMaxEntries() {
+        val dns = DnsConfig(
+            searchDomains = List(65) { index -> "corp$index.local" },
+            servers = listOf("1.1.1.1"),
+        )
         assertFailsWith<PayloadValidationException> {
-            DaemonPayloadValidator.validateDnsDomainPool(dnsDomainPool)
+            DaemonPayloadValidator.validateDns(dns)
         }
     }
 
@@ -56,10 +58,15 @@ class DaemonPayloadValidatorTest {
     }
 
     @Test
-    fun validateAddressesRejectsCidrAboveMaxLength() {
-        val longCidr = "1".repeat(65)
+    fun validateSessionRejectsIncompleteDns() {
         assertFailsWith<PayloadValidationException> {
-            DaemonPayloadValidator.validateAddresses(listOf(longCidr))
+            DaemonPayloadValidator.validate(
+                TunSessionConfig(
+                    interfaceName = "wg0",
+                    addresses = listOf("10.0.0.1/24"),
+                    dns = DnsConfig(searchDomains = listOf("corp.local")),
+                ),
+            )
         }
     }
 }

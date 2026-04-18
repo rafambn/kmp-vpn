@@ -1,18 +1,12 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyAddressesResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyDnsResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyMtuResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ApplyRoutesResponse
 import com.rafambn.wgkotlin.daemon.protocol.CommandResult
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
 import com.rafambn.wgkotlin.daemon.protocol.DaemonErrorKind
-import com.rafambn.wgkotlin.daemon.protocol.response.CreateInterfaceResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.DeleteInterfaceResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.InterfaceExistsResponse
+import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.response.PingResponse
-import com.rafambn.wgkotlin.daemon.protocol.response.ReadInterfaceInformationResponse
 import io.ktor.server.application.install
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
@@ -25,6 +19,8 @@ import java.time.Duration
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.rpc.krpc.ktor.server.Krpc
@@ -39,45 +35,36 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalSerializationApi::class)
 class DaemonClientSmokeTest {
     @Test
-    fun krpcClientPerformsHandshakeAndRoundTrip() = runBlocking {
+    fun krpcClientPerformsHandshakeAndStartSessionRoundTrip() = runBlocking {
         val port = randomPort()
         val engine = startServer(
             port = port,
             service = object : StubDaemonProcessApi() {
-                override suspend fun ping(): CommandResult<PingResponse> {
-                    return success(PingResponse)
-                }
+                override suspend fun ping(): CommandResult<PingResponse> = success(PingResponse)
 
-                override suspend fun applyDns(
-                    interfaceName: String,
-                    dnsDomainPool: Pair<List<String>, List<String>>,
-                ): CommandResult<ApplyDnsResponse> {
-                    return success(
-                        ApplyDnsResponse(
-                            interfaceName = interfaceName,
-                            dnsDomainPool = dnsDomainPool,
-                        ),
-                    )
+                override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> {
+                    assertEquals("utun55", config.interfaceName)
+                    assertEquals(listOf("corp.local"), config.dns.searchDomains)
+                    return flowOf(byteArrayOf(1, 2, 3))
                 }
             },
         )
 
-        val client = DaemonProcessClient.create(
-            config = DaemonClientConfig(port = port),
-        )
+        val client = DaemonProcessClient.create(config = DaemonClientConfig(port = port))
 
         try {
-            val hello = client.handshake()
-            assertTrue(hello.isSuccess)
+            assertTrue(client.handshake().isSuccess)
 
-            val response = client.applyDns(
-                interfaceName = "wg0",
-                dnsDomainPool = (listOf("corp.local") to listOf("1.1.1.1")),
-            )
-            val success = response as CommandResult.Success<ApplyDnsResponse>
+            val packets: List<ByteArray> = client.startSession(
+                config = TunSessionConfig(
+                    interfaceName = "utun55",
+                    dns = DnsConfig(searchDomains = listOf("corp.local"), servers = listOf("1.1.1.1")),
+                ),
+                outgoingPackets = flowOf(byteArrayOf(9)),
+            ).toList()
 
-            assertEquals("wg0", success.data.interfaceName)
-            assertEquals(listOf("corp.local") to listOf("1.1.1.1"), success.data.dnsDomainPool)
+            assertEquals(1, packets.size)
+            assertEquals("1, 2, 3", packets.single().joinToString())
         } finally {
             client.close()
             engine.stop(100, 1_000)
@@ -116,42 +103,9 @@ class DaemonClientSmokeTest {
     }
 
     @Test
-    fun remoteFailureIsReturnedAsFailureResult() = runBlocking {
-        val port = randomPort()
-        val engine = startServer(
-            port = port,
-            service = object : StubDaemonProcessApi() {
-                override suspend fun applyMtu(
-                    interfaceName: String,
-                    mtu: Int,
-                ): CommandResult<ApplyMtuResponse> {
-                    return failure(message = "forbidden")
-                }
-            },
-        )
-
-        val client = DaemonProcessClient.create(
-            config = DaemonClientConfig(port = port),
-        )
-
-        try {
-            val result = client.applyMtu(interfaceName = "wg0", mtu = 1420)
-            val failure = result as CommandResult.Failure
-
-            assertEquals(DaemonErrorKind.VALIDATION_ERROR, failure.kind)
-            assertEquals("forbidden", failure.message)
-        } finally {
-            client.close()
-            engine.stop(100, 1_000)
-        }
-    }
-
-    @Test
     fun globalBootstrapSupportsOverridesAndMultipleClientConfigs() = runBlocking {
         val stubService = object : StubDaemonProcessApi() {
-            override suspend fun ping(): CommandResult<PingResponse> {
-                return success(PingResponse)
-            }
+            override suspend fun ping(): CommandResult<PingResponse> = success(PingResponse)
         }
         val overrideModule = module {
             factory<DaemonProcessApi> { stubService }
@@ -176,42 +130,23 @@ class DaemonClientSmokeTest {
     }
 
     @Test
-    fun overridesDoNotLeakAcrossClientCreationCalls() = runBlocking {
-        val stubService = object : StubDaemonProcessApi() {
-            override suspend fun ping(): CommandResult<PingResponse> {
-                return success(PingResponse)
-            }
-        }
-        val overrideModule = module {
-            factory<DaemonProcessApi> { stubService }
-        }
-
-        val overridden = DaemonProcessClient.create(
-            config = DaemonClientConfig(port = 8787),
-            overrideModules = listOf(overrideModule),
+    fun handshakeRejectsRemoteFailure() = runBlocking {
+        val client = DaemonProcessClient(
+            service = object : StubDaemonProcessApi() {
+                override suspend fun ping(): CommandResult<PingResponse> {
+                    return CommandResult.failure(
+                        kind = DaemonErrorKind.INTERNAL_ERROR,
+                        message = "nope",
+                    )
+                }
+            },
         )
 
-        try {
-            assertTrue(overridden.ping().isSuccess)
-        } finally {
-            overridden.close()
+        val failure = assertFailsWith<DaemonClientException.ProtocolViolation> {
+            client.handshake()
         }
 
-        val failure = assertFailsWith<DaemonClientException.Timeout> {
-            DaemonProcessClient.create(
-                config = DaemonClientConfig(
-                    host = "203.0.113.1",
-                    port = 8787,
-                    timeout = Duration.ofMillis(10),
-                ),
-            ).use { client ->
-                runBlocking {
-                    client.ping()
-                }
-            }
-        }
-
-        assertEquals(10L, failure.timeout.toMillis())
+        assertTrue(failure.message.orEmpty().contains("nope"))
     }
 
     private fun startServer(
@@ -243,67 +178,17 @@ class DaemonClientSmokeTest {
         return engine
     }
 
-    private fun <S> success(data: S): CommandResult<S> {
-        return CommandResult.success(data = data)
-    }
+    private fun <S> success(data: S): CommandResult<S> = CommandResult.success(data = data)
 
-    private fun <S> unsupported(command: String): CommandResult<S> {
-        return CommandResult.failure(
-            kind = DaemonErrorKind.UNKNOWN_COMMAND,
-            message = "Unsupported command `$command`",
-        )
-    }
+    private open class StubDaemonProcessApi : DaemonProcessApi {
+        override suspend fun ping(): CommandResult<PingResponse> {
+            return CommandResult.failure(
+                kind = DaemonErrorKind.UNKNOWN_COMMAND,
+                message = "Unsupported command `PING`",
+            )
+        }
 
-    private fun <S> failure(message: String): CommandResult<S> {
-        return CommandResult.failure(
-            kind = DaemonErrorKind.VALIDATION_ERROR,
-            message = message,
-        )
-    }
-
-    private open inner class StubDaemonProcessApi : DaemonProcessApi {
-        override suspend fun ping(): CommandResult<PingResponse> = unsupported("PING")
-
-        override suspend fun createInterface(
-            interfaceName: String,
-        ): CommandResult<CreateInterfaceResponse> = unsupported("CREATE_INTERFACE")
-
-        override suspend fun interfaceExists(
-            interfaceName: String,
-        ): CommandResult<InterfaceExistsResponse> = unsupported("INTERFACE_EXISTS")
-
-        override suspend fun applyMtu(
-            interfaceName: String,
-            mtu: Int,
-        ): CommandResult<ApplyMtuResponse> = unsupported("APPLY_MTU")
-
-        override suspend fun applyAddresses(
-            interfaceName: String,
-            addresses: List<String>,
-        ): CommandResult<ApplyAddressesResponse> = unsupported("APPLY_ADDRESSES")
-
-        override suspend fun applyRoutes(
-            interfaceName: String,
-            routes: List<String>,
-        ): CommandResult<ApplyRoutesResponse> = unsupported("APPLY_ROUTES")
-
-        override suspend fun applyDns(
-            interfaceName: String,
-            dnsDomainPool: Pair<List<String>, List<String>>,
-        ): CommandResult<ApplyDnsResponse> = unsupported("APPLY_DNS")
-
-        override suspend fun readInterfaceInformation(
-            interfaceName: String,
-        ): CommandResult<ReadInterfaceInformationResponse> = unsupported("READ_INTERFACE_INFORMATION")
-
-        override suspend fun deleteInterface(
-            interfaceName: String,
-        ): CommandResult<DeleteInterfaceResponse> = unsupported("DELETE_INTERFACE")
-
-        override fun packetIO(
-            interfaceName: String,
-            outgoingPackets: Flow<ByteArray>,
-        ): Flow<ByteArray> = emptyFlow()
+        override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> = emptyFlow()
     }
 
     private fun randomPort(): Int {

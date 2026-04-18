@@ -1,52 +1,64 @@
 package com.rafambn.wgkotlin.daemon
 
-import com.rafambn.wgkotlin.daemon.command.ProcessInvocationModel
-import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
-import com.rafambn.wgkotlin.daemon.command.ProcessOutputModel
+import com.rafambn.wgkotlin.daemon.command.CommandBinary
 import com.rafambn.wgkotlin.daemon.di.DaemonKoinBootstrap
+import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
+import com.rafambn.wgkotlin.daemon.tun.TunHandle
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.koin.dsl.module
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotSame
-import kotlin.test.assertTrue
 
 class DaemonKoinBootstrapTest {
 
     @Test
     fun resolvingDependenciesAcceptsOverridesWithoutGlobalState() = runBlocking {
-        val firstLauncher = RecordingLauncher()
-        val secondLauncher = RecordingLauncher()
-        val overrideModule = module {
-            single<ProcessLauncher> { firstLauncher }
-        }
-        val secondOverrideModule = module {
-            single<ProcessLauncher> { secondLauncher }
-        }
+        val firstAdapter = RecordingAdapter()
+        val secondAdapter = RecordingAdapter()
+        val firstDependencies = DaemonKoinBootstrap.resolveDependencies(
+            overrideModules = listOf(module { single<PlatformAdapter> { firstAdapter } }),
+        )
+        val secondDependencies = DaemonKoinBootstrap.resolveDependencies(
+            overrideModules = listOf(module { single<PlatformAdapter> { secondAdapter } }),
+        )
 
-        val firstDependencies = DaemonKoinBootstrap.resolveDependencies(overrideModules = listOf(overrideModule))
-        val secondDependencies = DaemonKoinBootstrap.resolveDependencies(overrideModules = listOf(secondOverrideModule))
+        firstDependencies.service.startSession(
+            config = TunSessionConfig(interfaceName = "wg0", addresses = listOf("10.0.0.1/24")),
+            outgoingPackets = emptyFlow(),
+        ).first()
+        secondDependencies.service.startSession(
+            config = TunSessionConfig(interfaceName = "wg1", addresses = listOf("10.0.0.2/24")),
+            outgoingPackets = emptyFlow(),
+        ).first()
 
-        val firstResult = firstDependencies.service.applyMtu(interfaceName = "utun0", mtu = 1420)
-        val secondResult = secondDependencies.service.applyMtu(interfaceName = "utun1", mtu = 1420)
-
-        assertTrue(firstResult.isSuccess)
-        assertTrue(secondResult.isSuccess)
-        assertEquals(1, firstLauncher.invocations.size)
-        assertEquals(1, secondLauncher.invocations.size)
+        assertEquals(1, firstAdapter.startCalls)
+        assertEquals(1, secondAdapter.startCalls)
         assertNotSame(firstDependencies.service, secondDependencies.service)
     }
 
-    private class RecordingLauncher : ProcessLauncher {
-        val invocations: MutableList<ProcessInvocationModel> = mutableListOf()
+    private class RecordingAdapter : PlatformAdapter {
+        var startCalls: Int = 0
+        override val platformId: String = "test"
+        override val requiredBinaries: Set<CommandBinary> = emptySet()
 
-        override fun run(invocation: ProcessInvocationModel): ProcessOutputModel {
-            invocations += invocation
-            return ProcessOutputModel(
-                exitCode = 0,
-                stdout = "",
-                stderr = "",
-            )
+        override suspend fun startSession(config: TunSessionConfig): TunHandle {
+            startCalls++
+            return object : TunHandle {
+                override val interfaceName: String = config.interfaceName
+                private var emitted = false
+
+                override suspend fun readPacket(): ByteArray? {
+                    return if (emitted) { kotlinx.coroutines.delay(10); null } else byteArrayOf(1).also { emitted = true }
+                }
+
+                override suspend fun writePacket(packet: ByteArray) {}
+
+                override fun close() {}
+            }
         }
     }
 }

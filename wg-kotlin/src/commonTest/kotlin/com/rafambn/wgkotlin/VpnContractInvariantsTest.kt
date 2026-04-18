@@ -48,8 +48,6 @@ class VpnContractInvariantsTest {
             ),
         )
 
-        vpn.create()
-
         assertFailsWith<IllegalArgumentException> {
             vpn.reconfigure(
                 VpnConfiguration(
@@ -72,8 +70,6 @@ class VpnContractInvariantsTest {
                 privateKey = privateKey,
             ),
         )
-
-        vpn.create()
 
         assertFailsWith<IllegalArgumentException> {
             vpn.reconfigure(

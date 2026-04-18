@@ -4,190 +4,53 @@ import com.rafambn.wgkotlin.VpnConfiguration
 import com.rafambn.wgkotlin.requireValidConfiguration
 import com.rafambn.wgkotlin.session.DuplexChannelPipe
 
-/**
- * JVM-backed [InterfaceManager] implementation using privileged
- * [InterfaceCommandExecutor] operations.
- *
- * The cleartext packet pipe is provided by the caller. [up] opens the packetIO RPC bridge
- * via [InterfaceCommandExecutor.openPacketBridge]; [down] closes it.
- */
 class JvmInterfaceManager(
-    private val interfaceName: String,
     private val commandExecutor: InterfaceCommandExecutor,
     private val tunPipe: DuplexChannelPipe<ByteArray>,
 ) : InterfaceManager {
-    private var currentConfiguration: VpnConfiguration? = null
-    private var up: Boolean = false
-
+    private var currentConfig: VpnConfiguration? = null
     private var activeBridge: AutoCloseable? = null
 
-    override fun exists(): Boolean {
-        val observedExists = commandExecutor.interfaceExists(interfaceName)
-        if (!observedExists) {
-            runCatching { activeBridge?.close() }
-            activeBridge = null
-            currentConfiguration = null
-            up = false
-        }
-        return observedExists
-    }
+    override fun isRunning(): Boolean = activeBridge != null
 
-    override fun create(config: VpnConfiguration) {
+    override fun start(config: VpnConfiguration, onFailure: (Throwable) -> Unit) {
         requireValidConfiguration(config)
-        require(config.interfaceName == interfaceName) {
-            "Cannot create interface `${config.interfaceName}` on a manager for `$interfaceName`"
-        }
+        stop()
 
-        if (currentConfiguration == config && commandExecutor.interfaceExists(interfaceName)) {
-            return
-        }
-
-        var interfaceCreated = false
-        try {
-            commandExecutor.createInterface(interfaceName)
-            interfaceCreated = true
-            applyMtu(config)
-            applyAddresses(config)
-            applyRoutes(config)
-            applyDns(config)
-        } catch (throwable: Throwable) {
-            if (interfaceCreated) {
-                runCatching { commandExecutor.deleteInterface(interfaceName) }
-            }
-            runCatching { activeBridge?.close() }
-            activeBridge = null
-            currentConfiguration = null
-            up = false
-            throw IllegalStateException(
-                "Failed to create interface `$interfaceName`: ${throwable.message ?: "unknown"}",
-                throwable,
-            )
-        }
-
-        currentConfiguration = config.copy()
-        up = false
-    }
-
-    override fun up(onBridgeFailure: (Throwable) -> Unit) {
-        if (activeBridge != null && up) {
-            return
-        }
-
-        runCatching { activeBridge?.close() }
-        activeBridge = null
-        activeBridge = commandExecutor.openPacketBridge(
-            interfaceName = interfaceName,
+        val bridge = commandExecutor.openSession(
+            config = config.toTunSessionConfig(),
             pipe = tunPipe,
-        ) { throwable ->
-            up = false
-            val failedBridge = activeBridge
-            runCatching { failedBridge?.close() }
-            if (activeBridge === failedBridge) {
+            onFailure = { throwable ->
                 activeBridge = null
-            }
-            onBridgeFailure(throwable)
-        }
-        up = true
-    }
-
-    override fun down() {
-        if (activeBridge == null && !up) {
-            return
-        }
-
-        runCatching { activeBridge?.close() }
-        activeBridge = null
-        up = false
-    }
-
-    override fun delete() {
-        runCatching { activeBridge?.close() }
-        activeBridge = null
-        commandExecutor.deleteInterface(interfaceName)
-        currentConfiguration = null
-        up = false
-    }
-
-    override fun isUp(): Boolean {
-        val observedUp = commandExecutor.readInformation(interfaceName)?.isUp == true
-        up = observedUp
-        return observedUp
-    }
-
-    override fun configuration(): VpnConfiguration {
-        val configuration = currentConfiguration ?: throw IllegalStateException(
-            "Cannot access configuration before create()",
+                currentConfig = null
+                onFailure(throwable)
+            },
         )
 
-        return configuration.copy()
+        activeBridge = bridge
+        currentConfig = config.copy(addresses = config.addresses.toMutableList())
+    }
+
+    override fun stop() {
+        runCatching { activeBridge?.close() }
+        activeBridge = null
+        currentConfig = null
     }
 
     override fun reconfigure(config: VpnConfiguration) {
-        val previousConfiguration = currentConfiguration
-            ?: throw IllegalStateException("Cannot reconfigure before create()")
-
-        if (previousConfiguration == config) {
-            return
-        }
-
-        require(config.interfaceName == interfaceName) {
-            "Cannot reconfigure interface `$interfaceName` using `${config.interfaceName}`"
-        }
-
-        requireValidConfiguration(config)
-
-        try {
-            applyMtu(config)
-            applyAddresses(config)
-            applyRoutes(config)
-            applyDns(config)
-        } catch (throwable: Throwable) {
-            restoreConfiguration(previousConfiguration)
-            throw IllegalStateException(
-                "Failed to reconfigure interface `$interfaceName`: ${throwable.message ?: "unknown"}",
-                throwable,
-            )
-        }
-
-        currentConfiguration = config.copy()
+        stop()
+        start(config)
     }
 
-    override fun readInformation(): VpnInterfaceInformation? {
-        return commandExecutor.readInformation(interfaceName)
-    }
-
-    private fun applyMtu(config: VpnConfiguration) {
-        val mtu = config.mtu ?: return
-        commandExecutor.applyMtu(config.interfaceName, mtu)
-    }
-
-    private fun applyAddresses(config: VpnConfiguration) {
-        commandExecutor.applyAddresses(config.interfaceName, config.addresses.toList())
-    }
-
-    private fun applyRoutes(config: VpnConfiguration) {
-        commandExecutor.applyRoutes(
+    override fun information(): VpnInterfaceInformation? {
+        val config = currentConfig ?: return null
+        return VpnInterfaceInformation(
             interfaceName = config.interfaceName,
-            routes = config.peers
-                .flatMap { peer -> peer.allowedIps }
-                .filter { route -> route.isNotBlank() }
-                .distinct()
-                .sorted(),
+            isUp = isRunning(),
+            addresses = config.addresses.toList(),
+            dns = config.dns,
+            mtu = config.mtu,
+            listenPort = config.listenPort,
         )
-    }
-
-    private fun applyDns(config: VpnConfiguration) {
-        commandExecutor.applyDns(config.interfaceName, config.dnsDomainPool)
-    }
-
-    private fun restoreConfiguration(config: VpnConfiguration) {
-        try {
-            applyMtu(config)
-            applyAddresses(config)
-            applyRoutes(config)
-            applyDns(config)
-        } catch (_: Throwable) {
-            // rollback is best-effort; original failure remains primary
-        }
     }
 }

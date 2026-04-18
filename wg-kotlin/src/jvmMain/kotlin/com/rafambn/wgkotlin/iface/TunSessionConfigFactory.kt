@@ -1,0 +1,24 @@
+package com.rafambn.wgkotlin.iface
+
+import com.rafambn.wgkotlin.VpnConfiguration
+import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
+
+internal fun VpnConfiguration.toTunSessionConfig(): TunSessionConfig {
+    val routes = peers
+        .flatMap { peer -> peer.allowedIps }
+        .filter { route -> route.isNotBlank() }
+        .distinct()
+        .sorted()
+
+    return TunSessionConfig(
+        interfaceName = interfaceName,
+        mtu = mtu,
+        addresses = addresses.toList(),
+        routes = routes,
+        dns = DnsConfig(
+            searchDomains = dns.searchDomains,
+            servers = dns.servers,
+        ),
+    )
+}

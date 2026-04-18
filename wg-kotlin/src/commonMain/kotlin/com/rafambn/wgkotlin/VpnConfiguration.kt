@@ -5,7 +5,7 @@ package com.rafambn.wgkotlin
  */
 data class VpnConfiguration(
     val interfaceName: String,
-    val dnsDomainPool: Pair<List<String>, List<String>> = (emptyList<String>() to emptyList()),
+    val dns: DnsConfig = DnsConfig(),
     val mtu: Int? = null,
     val addresses: MutableList<String> = mutableListOf(),
     val listenPort: Int? = null,

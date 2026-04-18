@@ -73,22 +73,22 @@ private class DaemonCli : CliktCommand(name = "vpn-daemon") {
             )
         }
         val dependencies = DaemonKoinBootstrap.resolveDependencies()
-        val operationPlanner = dependencies.operationPlanner
+        val adapter = dependencies.adapter
 
         val isPrivileged = hasRequiredPrivileges()
         if (!isPrivileged) {
             throw UsageError(
-                "Daemon must run with elevated privileges for `${operationPlanner.platformId}` commands (current user: `${System.getProperty("user.name")}`).",
+                "Daemon must run with elevated privileges for `${adapter.platformId}` commands (current user: `${System.getProperty("user.name")}`).",
             )
         }
 
-        val missingBinaries = operationPlanner.requiredBinaries
+        val missingBinaries = adapter.requiredBinaries
             .filterNot { binary -> isBinaryAvailableOnPath(binary.executable) }
             .map { binary -> binary.executable }
 
         if (missingBinaries.isNotEmpty()) {
             throw UsageError(
-                "Missing required privileged binaries for `${operationPlanner.platformId}`: ${missingBinaries.joinToString(", ")}.",
+                "Missing required privileged binaries for `${adapter.platformId}`: ${missingBinaries.joinToString(", ")}.",
             )
         }
 

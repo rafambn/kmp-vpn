@@ -1,0 +1,82 @@
+package com.rafambn.wgkotlin.daemon.planner
+
+import com.rafambn.wgkotlin.daemon.command.CommandBinary
+import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
+import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
+import com.rafambn.wgkotlin.daemon.tun.RealTunHandleFactory
+import com.rafambn.wgkotlin.daemon.tun.TunHandle
+
+internal class LinuxPlatformAdapter(
+    processLauncher: ProcessLauncher,
+) : BasePlatformAdapter(processLauncher) {
+    override val platformId: String = "linux"
+    override val requiredBinaries: Set<CommandBinary> = setOf(
+        CommandBinary.IP,
+        CommandBinary.RESOLVECTL,
+    )
+
+    override suspend fun startSession(config: TunSessionConfig): TunHandle {
+        val handle = RealTunHandleFactory.fromConfig(config).open(config.interfaceName)
+        val interfaceName = handle.interfaceName
+
+        config.mtu?.let { mtu ->
+            runCommand(
+                operationLabel = "apply-mtu",
+                binary = CommandBinary.IP,
+                arguments = listOf("link", "set", "dev", interfaceName, "mtu", mtu.toString()),
+            )
+        }
+
+        runCommand(
+            operationLabel = "flush-addresses",
+            binary = CommandBinary.IP,
+            arguments = listOf("address", "flush", "dev", interfaceName),
+        )
+        config.addresses.forEach { address ->
+            runCommand(
+                operationLabel = "add-address",
+                binary = CommandBinary.IP,
+                arguments = listOf("address", "add", address, "dev", interfaceName),
+            )
+        }
+
+        config.routes.forEach { route ->
+            runCommand(
+                operationLabel = "add-route",
+                binary = CommandBinary.IP,
+                arguments = listOf("route", "replace", route, "dev", interfaceName),
+            )
+        }
+
+        val routingDomains = config.dns.searchDomains
+            .map { domain -> domain.trim() }
+            .filter { domain -> domain.isNotBlank() }
+            .distinct()
+            .map { domain -> "~${domain.removePrefix(".")}" }
+        val dnsServers = config.dns.servers
+            .map { server -> server.trim() }
+            .filter { server -> server.isNotBlank() }
+            .distinct()
+
+        if (routingDomains.isEmpty() || dnsServers.isEmpty()) {
+            runCommand(
+                operationLabel = "revert-dns",
+                binary = CommandBinary.RESOLVECTL,
+                arguments = listOf("revert", interfaceName),
+            )
+        } else {
+            runCommand(
+                operationLabel = "set-dns",
+                binary = CommandBinary.RESOLVECTL,
+                arguments = listOf("dns", interfaceName) + dnsServers,
+            )
+            runCommand(
+                operationLabel = "set-domains",
+                binary = CommandBinary.RESOLVECTL,
+                arguments = listOf("domain", interfaceName) + routingDomains,
+            )
+        }
+
+        return handle
+    }
+}
