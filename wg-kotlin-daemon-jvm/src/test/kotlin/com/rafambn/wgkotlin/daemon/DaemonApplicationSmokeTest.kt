@@ -15,14 +15,14 @@ class DaemonApplicationSmokeTest {
 
     @Test
     fun pingReturnsSuccess() = runBlocking {
-        val api = DaemonProcessApiImpl(adapter = RecordingAdapter())
+        val api = DaemonImpl(adapter = RecordingAdapter())
         assertEquals(PingResponse, api.ping())
     }
 
     @Test
     fun startSessionStreamsPacketsAndClosesHandle() = runBlocking {
         val adapter = RecordingAdapter()
-        val api = DaemonProcessApiImpl(adapter = adapter)
+        val api = DaemonImpl(adapter = adapter)
 
         val packet = api.startSession(
             config = TunSessionConfig(interfaceName = "wg0", addresses = listOf("10.0.0.1/24")),

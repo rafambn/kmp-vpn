@@ -2,7 +2,7 @@ package com.rafambn.wgkotlin.daemon
 
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapterFactory
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import kotlinx.coroutines.cancelAndJoin
@@ -13,9 +13,9 @@ import kotlinx.coroutines.launch
 
 internal const val MAX_PACKET_FRAME_SIZE: Int = 65535
 
-class DaemonProcessApiImpl internal constructor(
+class DaemonImpl internal constructor(
     private val adapter: PlatformAdapter = PlatformAdapterFactory.fromOs(),
-) : DaemonProcessApi {
+) : DaemonApi {
     private val activeSessionLock = Any()
     private val activeSessions = mutableSetOf<String>()
 

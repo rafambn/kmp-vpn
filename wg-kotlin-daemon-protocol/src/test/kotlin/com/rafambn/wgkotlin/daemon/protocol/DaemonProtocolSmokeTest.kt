@@ -58,7 +58,7 @@ class DaemonProtocolSmokeTest {
 
     @Test
     fun daemonProcessApiExposesOnlyPingAndStartSession() {
-        val functions = DaemonProcessApi::class.java.declaredMethods
+        val functions = DaemonApi::class.java.declaredMethods
             .map { method -> method.name }
             .sorted()
 
@@ -67,7 +67,7 @@ class DaemonProtocolSmokeTest {
 
     @Test
     fun startSessionRemainsPacketStreamApi() {
-        val function = DaemonProcessApi::class.java.declaredMethods.single { method -> method.name == "startSession" }
+        val function = DaemonApi::class.java.declaredMethods.single { method -> method.name == "startSession" }
         val returnTypeName = function.genericReturnType.typeName
 
         assertTrue(returnTypeName.contains("Flow"))
@@ -76,7 +76,7 @@ class DaemonProtocolSmokeTest {
 
     @Test
     fun pingReturnsDirectPingResponse() {
-        val function = DaemonProcessApi::class.java.declaredMethods.single { method -> method.name == "ping" }
+        val function = DaemonApi::class.java.declaredMethods.single { method -> method.name == "ping" }
         val continuationTypeName = function.genericParameterTypes.single().typeName
 
         assertTrue(continuationTypeName.contains("PingResponse"))

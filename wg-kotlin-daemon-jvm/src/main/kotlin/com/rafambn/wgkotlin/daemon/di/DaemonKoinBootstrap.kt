@@ -1,11 +1,11 @@
 package com.rafambn.wgkotlin.daemon.di
 
-import com.rafambn.wgkotlin.daemon.DaemonProcessApiImpl
+import com.rafambn.wgkotlin.daemon.DaemonImpl
 import com.rafambn.wgkotlin.daemon.command.CommonsExecProcessLauncher
 import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
 import com.rafambn.wgkotlin.daemon.planner.PlatformAdapterFactory
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import org.koin.core.module.Module
 import org.koin.dsl.koinApplication
 import org.koin.dsl.module
@@ -14,8 +14,8 @@ internal object DaemonKoinBootstrap {
     private val baseModule: Module = module {
         single<ProcessLauncher> { CommonsExecProcessLauncher() }
         single<PlatformAdapter> { PlatformAdapterFactory.fromOs(processLauncher = get()) }
-        single<DaemonProcessApi> {
-            DaemonProcessApiImpl(adapter = get())
+        single<DaemonApi> {
+            DaemonImpl(adapter = get())
         }
     }
 
@@ -38,5 +38,5 @@ internal object DaemonKoinBootstrap {
 
 internal data class DaemonRuntimeDependencies(
     val adapter: PlatformAdapter,
-    val service: DaemonProcessApi,
+    val service: DaemonApi,
 )

@@ -13,7 +13,7 @@ import kotlinx.rpc.annotations.Rpc
  * packet stream connects and down when it disconnects.
  */
 @Rpc
-interface DaemonProcessApi {
+interface DaemonApi {
     suspend fun ping(): PingResponse
 
     fun startSession(

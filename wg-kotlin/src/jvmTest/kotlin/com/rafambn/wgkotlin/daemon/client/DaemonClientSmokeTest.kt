@@ -1,7 +1,7 @@
 package com.rafambn.wgkotlin.daemon.client
 
 import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.PingResponse
@@ -37,7 +37,7 @@ class DaemonClientSmokeTest {
         val port = randomPort()
         val engine = startServer(
             port = port,
-            service = object : StubDaemonProcessApi() {
+            service = object : StubDaemonApi() {
                 override suspend fun ping(): PingResponse = PingResponse
 
                 override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> {
@@ -74,7 +74,7 @@ class DaemonClientSmokeTest {
         val port = randomPort()
         val engine = startServer(
             port = port,
-            service = object : StubDaemonProcessApi() {
+            service = object : StubDaemonApi() {
                 override suspend fun ping(): PingResponse {
                     delay(300)
                     return PingResponse
@@ -102,11 +102,11 @@ class DaemonClientSmokeTest {
 
     @Test
     fun globalBootstrapSupportsOverridesAndMultipleClientConfigs() = runBlocking {
-        val stubService = object : StubDaemonProcessApi() {
+        val stubService = object : StubDaemonApi() {
             override suspend fun ping(): PingResponse = PingResponse
         }
         val overrideModule = module {
-            factory<DaemonProcessApi> { stubService }
+            factory<DaemonApi> { stubService }
         }
 
         val first = DaemonProcessClient.create(
@@ -130,7 +130,7 @@ class DaemonClientSmokeTest {
     @Test
     fun handshakePropagatesRemoteException() = runBlocking {
         val client = DaemonProcessClient(
-            service = object : StubDaemonProcessApi() {
+            service = object : StubDaemonApi() {
                 override suspend fun ping(): PingResponse {
                     throw IllegalStateException("nope")
                 }
@@ -146,7 +146,7 @@ class DaemonClientSmokeTest {
 
     private fun startServer(
         port: Int,
-        service: DaemonProcessApi,
+        service: DaemonApi,
     ): EmbeddedServer<NettyApplicationEngine, NettyApplicationEngine.Configuration> {
         val engine = embeddedServer(Netty, host = "127.0.0.1", port = port, module = {
             install(WebSockets)
@@ -163,7 +163,7 @@ class DaemonClientSmokeTest {
                             protobuf()
                         }
                     }
-                    registerService<DaemonProcessApi> {
+                    registerService<DaemonApi> {
                         service
                     }
                 }
@@ -173,7 +173,7 @@ class DaemonClientSmokeTest {
         return engine
     }
 
-    private open class StubDaemonProcessApi : DaemonProcessApi {
+    private open class StubDaemonApi : DaemonApi {
         override suspend fun ping(): PingResponse {
             return PingResponse
         }

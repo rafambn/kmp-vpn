@@ -151,12 +151,12 @@ Why: This is the atomic config bundle sent with startSession. All configuration
 arrives together so the daemon can create the TUN and apply everything in one
 coherent operation without any risk of partial state.
 
-FILE: src/main/kotlin/com/rafambn/wgkotlin/daemon/protocol/DaemonProcessApi.kt (MODIFY)
+FILE: src/main/kotlin/com/rafambn/wgkotlin/daemon/protocol/DaemonApi.kt (MODIFY)
 
 Replace the entire interface body with:
 
   @Rpc
-  interface DaemonProcessApi {
+  interface DaemonApi {
       suspend fun ping(): CommandResult<PingResponse>
 
       fun startSession(
@@ -192,7 +192,7 @@ Keeping them would be dead code that confuses readers.
 
 FILE: src/test/kotlin/.../DaemonProtocolSmokeTest.kt (REWRITE)
 
-Rewrite this test to only verify that DaemonProcessApi has ping() and
+Rewrite this test to only verify that DaemonApi has ping() and
 startSession() and that TunSessionConfig and DnsConfig are serializable.
 Delete all tests that reference the removed methods.
 
@@ -200,25 +200,25 @@ Delete all tests that reference the removed methods.
 MODULE 2: wg-kotlin-daemon-jvm
 --------------------------------
 
-This module is the privileged daemon process. It implements DaemonProcessApi.
+This module is the privileged daemon process. It implements DaemonApi.
 This module has the most changes because the internal architecture changes
 completely.
 
 INTERNAL ARCHITECTURE OVERVIEW
 
 The current architecture:
-  DaemonProcessApiImpl
+  DaemonApiImpl
     -> PlatformOperationPlanner (translates DaemonOperation to ExecutionPlan)
     -> PlanExecutor (runs each ExecutionStep via ProcessLauncher)
     -> TunHandleFactory (separate concern, opened lazily in packetIO)
 
 The problem: PlatformOperationPlanner can only produce shell commands.
 Wintun DLL calls and utun socket creation are not shell commands so they were
-modeled as empty ExecutionPlans, pushing the real work into DaemonProcessApiImpl
+modeled as empty ExecutionPlans, pushing the real work into DaemonApiImpl
 with type-checks like "if (handle is RealTunHandle) handle.openDevice()".
 
 The new architecture:
-  DaemonProcessApiImpl
+  DaemonApiImpl
     -> PlatformAdapter (encapsulates everything: TUN creation + config application)
 
 PlatformAdapter.startSession(config) does all of:
@@ -227,7 +227,7 @@ PlatformAdapter.startSession(config) does all of:
 3. Applies DNS using shell commands (after TUN exists)
 4. Returns an open TunHandle ready for packet IO
 
-DaemonProcessApiImpl just calls adapter.startSession(config), loops on
+DaemonApiImpl just calls adapter.startSession(config), loops on
 handle.readPacket(), writes outgoingPackets to handle.writePacket(), and on
 flow completion calls handle.close() which destroys the TUN device.
 
@@ -250,7 +250,7 @@ FILE: src/main/kotlin/.../planner/PlatformAdapter.kt (CREATE)
       }
   }
 
-Why: The interface captures the only thing DaemonProcessApiImpl needs to know:
+Why: The interface captures the only thing DaemonApiImpl needs to know:
 given a config, give me an open TunHandle. How the TUN is created (Wintun DLL,
 utun socket, or tun-rs on Linux) is completely hidden from the caller.
 
@@ -296,7 +296,7 @@ This adapter:
 
 Why: The old MacOsOperationPlanner returned an empty plan for CreateInterface
 and added a comment saying "handled elsewhere." The actual utun socket creation
-was inside RealTunHandle.openDevice() called via a type-check in DaemonProcessApiImpl.
+was inside RealTunHandle.openDevice() called via a type-check in DaemonApiImpl.
 This adapter collapses that into one place.
 
 FILE: src/main/kotlin/.../planner/WindowsPlatformAdapter.kt (CREATE)
@@ -315,7 +315,7 @@ This adapter:
 
 Important: on Windows, cleaning up DNS NRPT rules must happen when the session
 ends, not when it starts. Add cleanup logic inside TunHandle.close() or as a
-teardown step in DaemonProcessApiImpl's finally block after the session ends.
+teardown step in DaemonApiImpl's finally block after the session ends.
 
 Why: WindowsOperationPlanner returned empty plans for CreateInterface and
 DeleteInterface and could not model Wintun DLL calls at all. The adapter
@@ -346,13 +346,13 @@ Why: readInterfaceInformation no longer exists as an RPC. The daemon does not
 need to read interface state from the OS. All interface information is already
 known to the caller from the config they passed in.
 
-FILE: DaemonProcessApiImpl.kt (REWRITE)
+FILE: DaemonApiImpl.kt (REWRITE)
 
 The new implementation:
 
-  class DaemonProcessApiImpl(
+  class DaemonApiImpl(
       private val adapter: PlatformAdapter = PlatformAdapterFactory.fromOs(),
-  ) : DaemonProcessApi {
+  ) : DaemonApi {
 
       private val activeSessionLock = Any()
       private val activeSessions = mutableSetOf<String>()
@@ -438,7 +438,7 @@ FILE: di/DaemonKoinBootstrap.kt (MODIFY)
 Wire PlatformAdapter instead of PlatformOperationPlanner and PlanExecutor:
 
   single<PlatformAdapter> { PlatformAdapterFactory.fromOs() }
-  single<DaemonProcessApi> { DaemonProcessApiImpl(adapter = get()) }
+  single<DaemonApi> { DaemonApiImpl(adapter = get()) }
 
 Remove bindings for PlatformOperationPlanner, PlanExecutor, TunHandleFactory.
 
@@ -472,7 +472,7 @@ This module is the JVM client that talks to the daemon over kRPC.
 
 FILE: DaemonProcessClient.kt (MODIFY)
 
-The DaemonProcessClient wraps DaemonProcessApi with timeout handling. Remove
+The DaemonProcessClient wraps DaemonApi with timeout handling. Remove
 the seven method wrappers that no longer exist. Keep ping() and handshake().
 Add startSession():
 
@@ -932,11 +932,11 @@ IMPLEMENTATION ORDER
 Implement in this order to keep the build passing at each step:
 
 1. wg-kotlin-daemon-protocol: Add DnsConfig.kt and TunSessionConfig.kt first.
-   Then modify DaemonProcessApi.kt. Then delete the 8 response DTOs.
+   Then modify DaemonApi.kt. Then delete the 8 response DTOs.
    The build will break downstream until step 2 is done.
 
 2. wg-kotlin-daemon-jvm: Add PlatformAdapter.kt and the three adapter
-   implementations. Rewrite DaemonProcessApiImpl.kt. Delete the old planner
+   implementations. Rewrite DaemonApiImpl.kt. Delete the old planner
    files. Update DaemonPayloadValidator.kt and DaemonKoinBootstrap.kt.
 
 3. wg-kotlin-daemon-client-jvm: Update DaemonProcessClient.kt.

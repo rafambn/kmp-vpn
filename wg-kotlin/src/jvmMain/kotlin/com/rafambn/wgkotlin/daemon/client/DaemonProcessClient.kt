@@ -1,7 +1,7 @@
 package com.rafambn.wgkotlin.daemon.client
 
 import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import java.time.Duration
@@ -11,10 +11,10 @@ import kotlinx.coroutines.withTimeout
 import org.koin.core.module.Module
 
 class DaemonProcessClient(
-    val service: DaemonProcessApi,
+    val service: DaemonApi,
     val timeout: Duration = Duration.ofSeconds(15),
     val resourceCloser: () -> Unit = {},
-) : DaemonProcessApi, AutoCloseable {
+) : DaemonApi, AutoCloseable {
 
     companion object {
         internal fun create(

@@ -1,6 +1,6 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -29,11 +29,11 @@ internal object DaemonClientKoinBootstrap {
             }
         }
 
-        factory<DaemonProcessApi> { params ->
+        factory<DaemonApi> { params ->
             val httpClient = params.get<HttpClient>()
             val config = params.get<DaemonClientConfig>()
             val rpcClient = httpClient.rpc(DaemonTransport.rpcUrl(host = config.host, port = config.port))
-            rpcClient.withService<DaemonProcessApi>()
+            rpcClient.withService<DaemonApi>()
         }
     }
 
@@ -61,7 +61,7 @@ internal object DaemonClientKoinBootstrap {
 
 internal data class DaemonClientDependencies(
     val httpClient: HttpClient,
-    val service: DaemonProcessApi,
+    val service: DaemonApi,
 ) {
     fun close() {
         httpClient.close()

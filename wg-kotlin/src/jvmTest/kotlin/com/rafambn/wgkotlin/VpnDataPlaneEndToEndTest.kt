@@ -2,7 +2,7 @@ package com.rafambn.wgkotlin
 
 import com.rafambn.wgkotlin.daemon.client.DaemonProcessClient
 import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import io.ktor.client.HttpClient
@@ -48,8 +48,8 @@ class VpnDataPlaneEndToEndTest {
                             protobuf()
                         }
                     }
-                    registerService<DaemonProcessApi> {
-                        object : DaemonProcessApi {
+                    registerService<DaemonApi> {
+                        object : DaemonApi {
                             override suspend fun ping(): PingResponse = PingResponse
                             override fun startSession(config: TunSessionConfig, outgoingPackets: Flow<ByteArray>): Flow<ByteArray> = flowOf(byteArrayOf(4, 5, 6))
                         }
@@ -68,7 +68,7 @@ class VpnDataPlaneEndToEndTest {
             }
         }
         val rpcClient = httpClient.rpc(DaemonTransport.rpcUrl(host = "127.0.0.1", port = port))
-        val client = DaemonProcessClient(service = rpcClient.withService<DaemonProcessApi>(), resourceCloser = { httpClient.close() })
+        val client = DaemonProcessClient(service = rpcClient.withService<DaemonApi>(), resourceCloser = { httpClient.close() })
         try {
             val packets: List<ByteArray> = client.startSession(
                 config = TunSessionConfig(interfaceName = "wg0", addresses = listOf("10.0.0.1/24")),

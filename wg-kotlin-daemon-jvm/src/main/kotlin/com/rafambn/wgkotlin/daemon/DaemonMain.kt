@@ -9,7 +9,7 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.rafambn.wgkotlin.daemon.di.DaemonKoinBootstrap
 import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
-import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
+import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
@@ -144,7 +144,7 @@ internal fun runCommandSuccessfully(command: List<String>): Boolean {
 internal fun createDaemonServer(
     host: String,
     port: Int,
-    service: DaemonProcessApi = DaemonProcessApiImpl(),
+    service: DaemonApi = DaemonImpl(),
 ) = embeddedServer(
     factory = Netty,
     host = host,
@@ -164,7 +164,7 @@ internal fun isBinaryAvailableOnPath(executable: String): Boolean {
 
 @OptIn(ExperimentalSerializationApi::class)
 fun Application.module(
-    service: DaemonProcessApi = DaemonProcessApiImpl(),
+    service: DaemonApi = DaemonImpl(),
 ) {
     install(WebSockets)
     install(Krpc) {
@@ -180,7 +180,7 @@ fun Application.module(
                     protobuf()
                 }
             }
-            registerService<DaemonProcessApi> {
+            registerService<DaemonApi> {
                 service
             }
         }
