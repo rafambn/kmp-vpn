@@ -1,9 +1,9 @@
-package com.rafambn.wgkotlin.daemon.planner
+package com.rafambn.wgkotlin.daemon.platformAdapter
 
 import com.rafambn.wgkotlin.daemon.command.CommandBinary
 import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.tun.RealTunHandleFactory
+import com.rafambn.wgkotlin.daemon.tun.RealTunHandle
 import com.rafambn.wgkotlin.daemon.tun.TunHandle
 
 internal class MacOsPlatformAdapter(
@@ -17,7 +17,12 @@ internal class MacOsPlatformAdapter(
     )
 
     override suspend fun startSession(config: TunSessionConfig): TunHandle {
-        val handle = RealTunHandleFactory.fromConfig(config).open(config.interfaceName)
+        val (ipv4Address, prefixLength) = extractPrimaryIpv4Address(config)
+        val handle = RealTunHandle(
+            requestedInterfaceName = config.interfaceName,
+            ipv4Address = ipv4Address,
+            prefixLength = prefixLength,
+        ).openDevice()
         val interfaceName = handle.interfaceName
 
         config.mtu?.let { mtu ->

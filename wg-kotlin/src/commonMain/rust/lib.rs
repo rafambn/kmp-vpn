@@ -197,10 +197,33 @@ impl TunDevice {
         })
     }
 
-    pub fn open(&self, ipv4_addr: String, prefix_len: u8) -> Result<(), TunError> {
-        let device = tun_rs::DeviceBuilder::new()
+    pub fn open(
+        &self,
+        ipv4_addr: String,
+        prefix_len: u8,
+        wintun_dll_path: Option<String>,
+    ) -> Result<(), TunError> {
+        #[cfg(windows)]
+        let mut builder = tun_rs::DeviceBuilder::new()
             .name(self.interface_name.clone())
-            .ipv4(ipv4_addr, prefix_len, None)
+            .ipv4(ipv4_addr, prefix_len, None);
+
+        #[cfg(not(windows))]
+        let builder = tun_rs::DeviceBuilder::new()
+            .name(self.interface_name.clone())
+            .ipv4(ipv4_addr, prefix_len, None);
+
+        #[cfg(windows)]
+        if let Some(path) = wintun_dll_path {
+            if !path.trim().is_empty() {
+                builder = builder.wintun_file(path);
+            }
+        }
+
+        #[cfg(not(windows))]
+        let _ = wintun_dll_path;
+
+        let device = builder
             .build_sync()
             .map_err(|e: std::io::Error| TunError::DeviceCreationFailed(e.to_string()))?;
 

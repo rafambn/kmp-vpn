@@ -1,37 +1,66 @@
 package com.rafambn.wgkotlin.daemon.tun
 
-import java.io.File
+import java.io.InputStream
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 internal object WindowsDllLoader {
     private val logger = org.slf4j.LoggerFactory.getLogger(WindowsDllLoader::class.java)
+    private val lock = Any()
 
-    fun loadWinTun() {
+    @Volatile
+    private var cachedWinTunDllPath: String? = null
+
+    /**
+     * Ensures a Windows-compatible `wintun.dll` exists on disk and is loaded.
+     *
+     * Returns an absolute path to `wintun.dll` on Windows so native code (tun-rs/wintun)
+     * can load that exact file. Returns null on non-Windows hosts.
+     */
+    fun prepareWinTunDllPath(): String? {
         if (!isWindows()) {
-            logger.debug("Not running on Windows, skipping WinTUN DLL load")
-            return
+            logger.debug("Not running on Windows, skipping WinTUN DLL preparation")
+            return null
         }
 
-        try {
-            val arch = detectArchitecture()
-            val dllName = when (arch) {
+        cachedWinTunDllPath?.let { return it }
+
+        synchronized(lock) {
+            cachedWinTunDllPath?.let { return it }
+
+            val architecture = detectArchitecture()
+            val sourceResource = when (architecture) {
                 Architecture.X86 -> "wintun-x86.dll"
                 Architecture.X64 -> "wintun-x64.dll"
                 Architecture.ARM64 -> "wintun-arm64.dll"
             }
 
-            logger.info("Loading WinTUN DLL for architecture: $arch ($dllName)")
-            loadDllFromResources(dllName)
-        } catch (e: Exception) {
-            logger.error("Failed to load WinTUN DLL", e)
-            throw e
+            val targetPath = extractAsCanonicalWinTunDll(sourceResource)
+            val targetPathString = targetPath.toAbsolutePath().toString()
+
+            try {
+                System.load(targetPathString)
+                logger.info("Loaded WinTUN DLL from: $targetPathString")
+            } catch (e: UnsatisfiedLinkError) {
+                if (!e.message.orEmpty().contains("already loaded", ignoreCase = true)) {
+                    logger.error("Failed to load WinTUN DLL from: $targetPathString", e)
+                    throw e
+                }
+                logger.debug("WinTUN DLL already loaded: $targetPathString")
+            }
+
+            cachedWinTunDllPath = targetPathString
+            return targetPathString
         }
     }
 
-    private fun detectArchitecture(): Architecture {
-        val arch = System.getProperty("os.arch").lowercase()
-        val bits = System.getProperty("sun.arch.data.model")
+    internal fun detectArchitecture(
+        archProperty: String = System.getProperty("os.arch"),
+        bitsProperty: String? = System.getProperty("sun.arch.data.model"),
+    ): Architecture {
+        val arch = archProperty.lowercase()
+        val bits = bitsProperty?.lowercase()
 
         return when {
             arch.contains("amd64") || arch.contains("x86_64") -> Architecture.X64
@@ -42,41 +71,33 @@ internal object WindowsDllLoader {
         }
     }
 
-    private fun loadDllFromResources(dllName: String) {
-        // First try to load from system PATH
-        try {
-            System.loadLibrary(dllName.removeSuffix(".dll"))
-            logger.info("Successfully loaded WinTUN DLL from system PATH")
-            return
-        } catch (e: UnsatisfiedLinkError) {
-            logger.debug("WinTUN DLL not found in system PATH, attempting to load from resources")
-        }
-
-        // Load from resources
-        val resourcePath = "/wintun/$dllName"
-        val resource = WindowsDllLoader::class.java.getResourceAsStream(resourcePath)
+    private fun extractAsCanonicalWinTunDll(sourceDllName: String): Path {
+        val resourcePath = "/wintun/$sourceDllName"
+        val input = openResource(resourcePath)
             ?: throw IllegalStateException("WinTUN DLL not found in resources: $resourcePath")
 
-        val tempFile = Files.createTempFile("wintun", ".dll")
-        tempFile.toFile().deleteOnExit()
+        val targetDir = Path.of(System.getProperty("java.io.tmpdir"), "wg-kotlin", "wintun")
+        Files.createDirectories(targetDir)
+        val targetPath = targetDir.resolve("wintun.dll")
 
-        resource.use { input ->
-            Files.copy(input, tempFile, StandardCopyOption.REPLACE_EXISTING)
+        input.use { stream ->
+            Files.copy(stream, targetPath, StandardCopyOption.REPLACE_EXISTING)
         }
 
-        logger.debug("Extracted WinTUN DLL to temporary location: ${tempFile.toAbsolutePath()}")
-
-        // Load the DLL from the temporary location
-        System.load(tempFile.toAbsolutePath().toString())
-        logger.info("Successfully loaded WinTUN DLL from resources")
+        targetPath.toFile().deleteOnExit()
+        logger.debug("Extracted WinTUN resource `$sourceDllName` to `$targetPath`")
+        return targetPath
     }
 
-    private fun isWindows(): Boolean {
-        val osName = System.getProperty("os.name").lowercase()
-        return osName.contains("win")
+    internal fun openResource(resourcePath: String): InputStream? {
+        return WindowsDllLoader::class.java.getResourceAsStream(resourcePath)
     }
 
-    private enum class Architecture {
+    private fun isWindows(osName: String = System.getProperty("os.name")): Boolean {
+        return osName.lowercase().contains("win")
+    }
+
+    internal enum class Architecture {
         X86,
         X64,
         ARM64,

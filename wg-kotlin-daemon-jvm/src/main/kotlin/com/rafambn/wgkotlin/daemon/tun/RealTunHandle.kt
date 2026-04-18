@@ -19,7 +19,6 @@ internal class RealTunHandle(
 
     private val logger = org.slf4j.LoggerFactory.getLogger(RealTunHandle::class.java)
 
-    // The actual Rust TUN device via uniffi
     private var tunDevice: TunDevice? = null
     private var isClosed = false
     private var openedInterfaceName: String = requestedInterfaceName
@@ -30,8 +29,9 @@ internal class RealTunHandle(
     suspend fun openDevice(): RealTunHandle {
         logger.info("Opening TUN device: $requestedInterfaceName with IP $ipv4Address/$prefixLength")
 
-        // Load WinTUN DLL on Windows before attempting to open device
-        WindowsDllLoader.loadWinTun()
+        // Prepare and load WinTUN DLL on Windows before attempting to open device.
+        // The returned path is passed to tun-rs so it loads the exact DLL we extracted.
+        val winTunDllPath = WindowsDllLoader.prepareWinTunDllPath()
 
         withContext(Dispatchers.IO) {
             try {
@@ -39,7 +39,7 @@ internal class RealTunHandle(
                 tunDevice = TunDevice(requestedInterfaceName)
 
                 // Open the device with the specified IPv4 address
-                tunDevice?.open(ipv4Address, prefixLength)
+                tunDevice?.open(ipv4Address, prefixLength, winTunDllPath)
                 openedInterfaceName = tunDevice?.getInterfaceName() ?: requestedInterfaceName
 
                 logger.info("TUN device opened successfully: $openedInterfaceName")

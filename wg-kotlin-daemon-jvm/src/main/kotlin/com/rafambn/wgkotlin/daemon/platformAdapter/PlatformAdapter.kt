@@ -1,4 +1,4 @@
-package com.rafambn.wgkotlin.daemon.planner
+package com.rafambn.wgkotlin.daemon.platformAdapter
 
 import com.rafambn.wgkotlin.daemon.command.CommandBinary
 import com.rafambn.wgkotlin.daemon.command.CommandFailed
@@ -58,4 +58,13 @@ internal abstract class BasePlatformAdapter(
             )
         }
     }
+}
+
+internal fun extractPrimaryIpv4Address(config: TunSessionConfig): Pair<String, UByte> {
+    val ipv4Address = config.addresses
+        .map { address -> address.substringBefore("/") to address.substringAfter("/", "") }
+        .firstOrNull { (ip, prefix) -> ip.isNotBlank() && !ip.contains(":") && prefix.isNotBlank() }
+        ?: throw IllegalArgumentException("Tun session requires at least one IPv4 address")
+
+    return ipv4Address.first to ipv4Address.second.toUByte()
 }

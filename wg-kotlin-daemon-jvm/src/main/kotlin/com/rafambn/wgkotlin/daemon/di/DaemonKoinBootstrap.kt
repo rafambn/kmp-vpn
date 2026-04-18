@@ -3,8 +3,8 @@ package com.rafambn.wgkotlin.daemon.di
 import com.rafambn.wgkotlin.daemon.DaemonImpl
 import com.rafambn.wgkotlin.daemon.command.CommonsExecProcessLauncher
 import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
-import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
-import com.rafambn.wgkotlin.daemon.planner.PlatformAdapterFactory
+import com.rafambn.wgkotlin.daemon.platformAdapter.PlatformAdapter
+import com.rafambn.wgkotlin.daemon.platformAdapter.PlatformAdapterFactory
 import com.rafambn.wgkotlin.daemon.protocol.DaemonApi
 import org.koin.core.module.Module
 import org.koin.dsl.koinApplication

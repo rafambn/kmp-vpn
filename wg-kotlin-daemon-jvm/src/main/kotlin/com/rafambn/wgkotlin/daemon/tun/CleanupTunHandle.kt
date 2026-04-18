@@ -1,6 +1,4 @@
-package com.rafambn.wgkotlin.daemon.planner
-
-import com.rafambn.wgkotlin.daemon.tun.TunHandle
+package com.rafambn.wgkotlin.daemon.tun
 
 internal class CleanupTunHandle(
     private val delegate: TunHandle,

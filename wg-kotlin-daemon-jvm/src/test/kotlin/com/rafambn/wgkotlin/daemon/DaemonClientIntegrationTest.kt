@@ -1,7 +1,7 @@
 package com.rafambn.wgkotlin.daemon
 
 import com.rafambn.wgkotlin.daemon.command.CommandBinary
-import com.rafambn.wgkotlin.daemon.planner.PlatformAdapter
+import com.rafambn.wgkotlin.daemon.platformAdapter.PlatformAdapter
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.tun.TunHandle
 import kotlinx.coroutines.flow.emptyFlow
