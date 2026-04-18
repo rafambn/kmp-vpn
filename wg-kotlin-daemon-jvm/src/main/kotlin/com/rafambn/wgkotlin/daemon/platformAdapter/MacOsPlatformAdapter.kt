@@ -3,6 +3,7 @@ package com.rafambn.wgkotlin.daemon.platformAdapter
 import com.rafambn.wgkotlin.daemon.command.CommandBinary
 import com.rafambn.wgkotlin.daemon.command.ProcessLauncher
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
+import com.rafambn.wgkotlin.daemon.tun.CleanupTunHandle
 import com.rafambn.wgkotlin.daemon.tun.RealTunHandle
 import com.rafambn.wgkotlin.daemon.tun.TunHandle
 
@@ -63,8 +64,7 @@ internal class MacOsPlatformAdapter(
                 )
             }
 
-            val resolverPath = "State:/Network/Service/$interfaceName/DNS"
-            val resolverRootPath = "State:/Network/Service/$interfaceName"
+            clearDnsEntries(interfaceName)
             val dnsServers = config.dns.servers
                 .map { server -> server.trim() }
                 .filter { server -> server.isNotBlank() }
@@ -74,17 +74,9 @@ internal class MacOsPlatformAdapter(
                 .filter { domain -> domain.isNotBlank() }
                 .distinct()
 
-            runCommand(
-                operationLabel = "clear-dns",
-                binary = CommandBinary.SCUTIL,
-                stdin = buildString {
-                    appendLine("remove $resolverPath")
-                    appendLine("remove $resolverRootPath")
-                    appendLine("quit")
-                },
-            )
-
             if (domains.isNotEmpty() && dnsServers.isNotEmpty()) {
+                val resolverPath = resolverPath(interfaceName)
+                val resolverRootPath = resolverRootPath(interfaceName)
                 runCommand(
                     operationLabel = "set-dns",
                     binary = CommandBinary.SCUTIL,
@@ -107,10 +99,34 @@ internal class MacOsPlatformAdapter(
                     },
                 )
             }
-            handle
+            CleanupTunHandle(
+                delegate = handle,
+                cleanup = { clearDnsEntries(interfaceName) },
+            )
         } catch (failure: Throwable) {
             runCatching { handle.close() }
+            runCatching { clearDnsEntries(handle.interfaceName) }
             throw failure
         }
+    }
+
+    private fun clearDnsEntries(interfaceName: String) {
+        runCommand(
+            operationLabel = "clear-dns",
+            binary = CommandBinary.SCUTIL,
+            stdin = buildString {
+                appendLine("remove ${resolverPath(interfaceName)}")
+                appendLine("remove ${resolverRootPath(interfaceName)}")
+                appendLine("quit")
+            },
+        )
+    }
+
+    private fun resolverPath(interfaceName: String): String {
+        return "State:/Network/Service/$interfaceName/DNS"
+    }
+
+    private fun resolverRootPath(interfaceName: String): String {
+        return "State:/Network/Service/$interfaceName"
     }
 }

@@ -47,12 +47,15 @@ class PlatformAdapterFailureCleanupTest {
     }
 
     @Test
-    fun macOsClosesTunHandleWhenConfigurationFails() = runBlocking {
+    fun macOsClosesTunHandleAndClearsDnsEntriesWhenConfigurationFails() = runBlocking {
+        val invocations = mutableListOf<ProcessInvocationModel>()
+
         mockkConstructor(RealTunHandle::class)
         try {
             val openedHandle = mockOpenedTunHandle("utun7")
             val adapter = MacOsPlatformAdapter(
                 processLauncher = ProcessLauncher { invocation ->
+                    invocations += invocation
                     if (invocation.binary == CommandBinary.ROUTE && invocation.arguments.contains("add")) {
                         ProcessOutputModel(exitCode = 1, stdout = "", stderr = "route failed")
                     } else {
@@ -72,6 +75,13 @@ class PlatformAdapterFailureCleanupTest {
             }
 
             verify(exactly = 1) { openedHandle.close() }
+            assertEquals(
+                1,
+                invocations.count { invocation ->
+                    invocation.binary == CommandBinary.SCUTIL &&
+                        invocation.stdin?.contains("remove State:/Network/Service/utun7") == true
+                },
+            )
         } finally {
             unmockkConstructor(RealTunHandle::class)
         }
