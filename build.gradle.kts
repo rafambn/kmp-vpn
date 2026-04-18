@@ -51,9 +51,6 @@ abstract class ArchitectureBoundaryCheckTask : DefaultTask() {
     @get:Input
     abstract val daemonJvmProjectDependencies: ListProperty<String>
 
-    @get:Input
-    abstract val daemonClientProjectDependencies: ListProperty<String>
-
     @TaskAction
     fun verify() {
         val coreDependencies = coreProjectDependencies.get().toSet()
@@ -65,23 +62,10 @@ abstract class ArchitectureBoundaryCheckTask : DefaultTask() {
         if (":wg-kotlin-daemon-protocol" !in daemonJvmDependencies) {
             throw GradleException("Architecture rule violated: :wg-kotlin-daemon-jvm must depend on :wg-kotlin-daemon-protocol.")
         }
-        val daemonJvmUnexpected = daemonJvmDependencies - setOf(":wg-kotlin-daemon-protocol", ":wg-kotlin", ":wg-kotlin-daemon-client-jvm")
+        val daemonJvmUnexpected = daemonJvmDependencies - setOf(":wg-kotlin-daemon-protocol", ":wg-kotlin")
         if (daemonJvmUnexpected.isNotEmpty()) {
             throw GradleException(
                 "Architecture rule violated: :wg-kotlin-daemon-jvm has unexpected project dependencies: $daemonJvmUnexpected"
-            )
-        }
-
-        val daemonClientDependencies = daemonClientProjectDependencies.get().toSet()
-        if (":wg-kotlin-daemon-protocol" !in daemonClientDependencies) {
-            throw GradleException(
-                "Architecture rule violated: :wg-kotlin-daemon-client-jvm must depend on :wg-kotlin-daemon-protocol."
-            )
-        }
-        val daemonClientUnexpected = daemonClientDependencies - setOf(":wg-kotlin-daemon-protocol")
-        if (daemonClientUnexpected.isNotEmpty()) {
-            throw GradleException(
-                "Architecture rule violated: :wg-kotlin-daemon-client-jvm has unexpected project dependencies: $daemonClientUnexpected"
             )
         }
     }
@@ -107,11 +91,6 @@ gradle.projectsEvaluated {
                 collectResolvedProjectDependencies(":wg-kotlin-daemon-jvm", jvmMainClasspathConfigurations)
             }
         )
-        daemonClientProjectDependencies.set(
-            providers.provider {
-                collectResolvedProjectDependencies(":wg-kotlin-daemon-client-jvm", jvmMainClasspathConfigurations)
-            }
-        )
     }
 }
 
@@ -133,12 +112,6 @@ val ciWgKotlinDaemonJvm = tasks.register("ciWgKotlinDaemonJvm") {
     dependsOn(":wg-kotlin-daemon-jvm:check")
 }
 
-val ciWgKotlinDaemonClientJvm = tasks.register("ciWgKotlinDaemonClientJvm") {
-    group = "verification"
-    description = "CI entry task for :wg-kotlin-daemon-client-jvm."
-    dependsOn(":wg-kotlin-daemon-client-jvm:check")
-}
-
 tasks.register("ciPhase01") {
     group = "verification"
     description = "Aggregate CI entry task for phase 01 scaffolding."
@@ -146,7 +119,6 @@ tasks.register("ciPhase01") {
         checkArchitectureBoundaries,
         ciWgKotlinCore,
         ciWgKotlinDaemonProtocol,
-        ciWgKotlinDaemonJvm,
-        ciWgKotlinDaemonClientJvm
+        ciWgKotlinDaemonJvm
     )
 }

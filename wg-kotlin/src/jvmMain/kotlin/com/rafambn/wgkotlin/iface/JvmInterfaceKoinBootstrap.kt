@@ -1,7 +1,6 @@
 package com.rafambn.wgkotlin.iface
 
-import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_HOST
-import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_PORT
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import com.rafambn.wgkotlin.session.DuplexChannelPipe
 import java.time.Duration
 import org.koin.core.module.Module
@@ -21,8 +20,8 @@ internal object JvmInterfaceKoinBootstrap {
             ) {
                 JvmInterfaceProperties.INTERFACE_MODE_IN_MEMORY -> InMemoryInterfaceCommandExecutor()
                 else -> DaemonBackedInterfaceCommandExecutor(
-                    host = System.getProperty(JvmInterfaceProperties.DAEMON_HOST, DEFAULT_DAEMON_HOST),
-                    port = System.getProperty(JvmInterfaceProperties.DAEMON_PORT)?.toIntOrNull() ?: DEFAULT_DAEMON_PORT,
+                    host = System.getProperty(JvmInterfaceProperties.DAEMON_HOST, DaemonTransport.DEFAULT_DAEMON_HOST),
+                    port = System.getProperty(JvmInterfaceProperties.DAEMON_PORT)?.toIntOrNull() ?: DaemonTransport.DEFAULT_DAEMON_PORT,
                     timeout = Duration.ofMillis(
                         System.getProperty(JvmInterfaceProperties.DAEMON_TIMEOUT_MILLIS)?.toLongOrNull() ?: 15_000L,
                     ),

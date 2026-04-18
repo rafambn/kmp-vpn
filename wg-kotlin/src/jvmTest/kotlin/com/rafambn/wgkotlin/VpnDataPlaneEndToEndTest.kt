@@ -1,10 +1,9 @@
 package com.rafambn.wgkotlin
 
 import com.rafambn.wgkotlin.daemon.client.DaemonProcessClient
-import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.protocol.daemonRpcUrl
 import com.rafambn.wgkotlin.daemon.protocol.PingResponse
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -43,7 +42,7 @@ class VpnDataPlaneEndToEndTest {
                 }
             }
             routing {
-                rpc(DAEMON_RPC_PATH) {
+                rpc(DaemonTransport.DAEMON_RPC_PATH) {
                     rpcConfig {
                         serialization {
                             protobuf()
@@ -68,7 +67,7 @@ class VpnDataPlaneEndToEndTest {
                 }
             }
         }
-        val rpcClient = httpClient.rpc(daemonRpcUrl(host = "127.0.0.1", port = port))
+        val rpcClient = httpClient.rpc(DaemonTransport.rpcUrl(host = "127.0.0.1", port = port))
         val client = DaemonProcessClient(service = rpcClient.withService<DaemonProcessApi>(), resourceCloser = { httpClient.close() })
         try {
             val packets: List<ByteArray> = client.startSession(

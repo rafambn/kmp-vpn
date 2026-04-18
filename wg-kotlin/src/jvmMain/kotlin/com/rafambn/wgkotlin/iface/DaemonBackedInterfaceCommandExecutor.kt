@@ -1,9 +1,9 @@
 package com.rafambn.wgkotlin.iface
 
 import com.rafambn.wgkotlin.daemon.client.DaemonProcessClient
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
-import com.rafambn.wgkotlin.daemon.protocol.daemonRpcUrl
 import com.rafambn.wgkotlin.session.DuplexChannelPipe
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -44,7 +44,7 @@ class DaemonBackedInterfaceCommandExecutor(
                 }
             }
         }
-        val rpcClient = httpClient.rpc(daemonRpcUrl(host = host, port = port))
+        val rpcClient = httpClient.rpc(DaemonTransport.rpcUrl(host = host, port = port))
         DaemonProcessClient(
             service = rpcClient.withService<DaemonProcessApi>(),
             timeout = timeout,

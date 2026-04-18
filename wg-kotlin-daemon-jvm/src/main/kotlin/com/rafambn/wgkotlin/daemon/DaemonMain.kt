@@ -8,9 +8,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.rafambn.wgkotlin.daemon.di.DaemonKoinBootstrap
-import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
-import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_HOST
-import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_PORT
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -39,7 +37,7 @@ private class DaemonCli : CliktCommand(name = "vpn-daemon") {
             fail("Daemon host cannot be blank.")
         }
         value
-    }.default(DEFAULT_DAEMON_HOST)
+    }.default(DaemonTransport.DEFAULT_DAEMON_HOST)
 
     private val port: Int by option(
         "--port",
@@ -53,7 +51,7 @@ private class DaemonCli : CliktCommand(name = "vpn-daemon") {
         }
 
         parsed
-    }.default(DEFAULT_DAEMON_PORT)
+    }.default(DaemonTransport.DEFAULT_DAEMON_PORT)
 
     private val allowRemote: Boolean by option(
         "--allow-remote",
@@ -176,7 +174,7 @@ fun Application.module(
     }
 
     routing {
-        rpc(DAEMON_RPC_PATH) {
+        rpc(DaemonTransport.DAEMON_RPC_PATH) {
             rpcConfig {
                 serialization {
                     protobuf()

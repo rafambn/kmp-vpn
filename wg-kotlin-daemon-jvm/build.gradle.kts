@@ -29,7 +29,6 @@ dependencies {
 
     testImplementation(kotlin("test-junit5"))
     testImplementation(libs.mockk)
-    testImplementation(project(":wg-kotlin-daemon-client-jvm"))
     testImplementation(libs.kotlinx.rpc.krpc.client)
     testImplementation(libs.kotlinx.rpc.krpc.serialization.protobuf)
     testImplementation(libs.kotlinx.rpc.krpc.ktor.client)

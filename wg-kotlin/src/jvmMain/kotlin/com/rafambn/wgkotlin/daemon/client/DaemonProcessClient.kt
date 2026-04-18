@@ -1,6 +1,6 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.DEFAULT_DAEMON_HOST
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
 import com.rafambn.wgkotlin.daemon.protocol.PingResponse
@@ -75,7 +75,7 @@ class DaemonProcessClient(
 }
 
 data class DaemonClientConfig(
-    val host: String = DEFAULT_DAEMON_HOST,
+    val host: String = DaemonTransport.DEFAULT_DAEMON_HOST,
     val port: Int,
     val timeout: Duration = Duration.ofSeconds(15),
 ) {

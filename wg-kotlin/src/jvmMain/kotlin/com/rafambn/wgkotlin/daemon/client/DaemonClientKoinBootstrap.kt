@@ -1,7 +1,7 @@
 package com.rafambn.wgkotlin.daemon.client
 
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
-import com.rafambn.wgkotlin.daemon.protocol.daemonRpcUrl
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.websocket.WebSockets
@@ -32,7 +32,7 @@ internal object DaemonClientKoinBootstrap {
         factory<DaemonProcessApi> { params ->
             val httpClient = params.get<HttpClient>()
             val config = params.get<DaemonClientConfig>()
-            val rpcClient = httpClient.rpc(daemonRpcUrl(host = config.host, port = config.port))
+            val rpcClient = httpClient.rpc(DaemonTransport.rpcUrl(host = config.host, port = config.port))
             rpcClient.withService<DaemonProcessApi>()
         }
     }

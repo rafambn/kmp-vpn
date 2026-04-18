@@ -85,7 +85,14 @@ class DaemonProtocolSmokeTest {
 
     @Test
     fun daemonRpcUrlWrapsIpv6Hosts() {
-        assertEquals("ws://[::1]:8787/services", daemonRpcUrl(host = "::1", port = 8787))
-        assertEquals("ws://127.0.0.1:8787/services", daemonRpcUrl(host = "127.0.0.1", port = 8787))
+        assertEquals("ws://[::1]:8787/services", DaemonTransport.rpcUrl(host = "::1", port = 8787))
+        assertEquals("ws://127.0.0.1:8787/services", DaemonTransport.rpcUrl(host = "127.0.0.1", port = 8787))
+    }
+
+    @Test
+    fun daemonTransportExposesCanonicalDefaults() {
+        assertEquals("127.0.0.1", DaemonTransport.DEFAULT_DAEMON_HOST)
+        assertEquals(8787, DaemonTransport.DEFAULT_DAEMON_PORT)
+        assertEquals("/services", DaemonTransport.DAEMON_RPC_PATH)
     }
 }

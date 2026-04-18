@@ -69,7 +69,6 @@ kotlin {
 
         jvmMain.dependencies {
             implementation(project(":wg-kotlin-daemon-protocol"))
-            implementation(project(":wg-kotlin-daemon-client-jvm"))
             implementation(libs.kotlinx.rpc.krpc.client)
             implementation(libs.kotlinx.rpc.krpc.serialization.protobuf)
             implementation(libs.kotlinx.rpc.krpc.ktor.client)

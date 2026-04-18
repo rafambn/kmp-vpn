@@ -1,6 +1,6 @@
 package com.rafambn.wgkotlin.daemon.client
 
-import com.rafambn.wgkotlin.daemon.protocol.DAEMON_RPC_PATH
+import com.rafambn.wgkotlin.daemon.protocol.DaemonTransport
 import com.rafambn.wgkotlin.daemon.protocol.DaemonProcessApi
 import com.rafambn.wgkotlin.daemon.protocol.DnsConfig
 import com.rafambn.wgkotlin.daemon.protocol.TunSessionConfig
@@ -157,7 +157,7 @@ class DaemonClientSmokeTest {
             }
 
             routing {
-                rpc(DAEMON_RPC_PATH) {
+                rpc(DaemonTransport.DAEMON_RPC_PATH) {
                     rpcConfig {
                         serialization {
                             protobuf()

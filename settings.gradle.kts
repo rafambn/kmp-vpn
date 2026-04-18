@@ -34,4 +34,3 @@ dependencyResolutionManagement {
 include(":wg-kotlin")
 include(":wg-kotlin-daemon-protocol")
 include(":wg-kotlin-daemon-jvm")
-include(":wg-kotlin-daemon-client-jvm")

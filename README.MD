@@ -9,7 +9,6 @@ Current library targets: JVM/desktop.
 - `:wg-kotlin`: core orchestration API and contract boundaries.
 - `:wg-kotlin-daemon-protocol`: typed daemon request/response models shared by JVM components.
 - `:wg-kotlin-daemon-jvm`: privileged daemon executable scaffold.
-- `:wg-kotlin-daemon-client-jvm`: JVM client scaffold for daemon IPC.
 
 Architecture checklist: `docs/new-vpn-rebuild/01-architecture-review-checklist.md`  
 CI entry task (phase 01): `./gradlew ciPhase01`
