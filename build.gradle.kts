@@ -57,31 +57,31 @@ abstract class ArchitectureBoundaryCheckTask : DefaultTask() {
     @TaskAction
     fun verify() {
         val coreDependencies = coreProjectDependencies.get().toSet()
-        if (":new-vpn-daemon-jvm" in coreDependencies) {
-            throw GradleException("Architecture rule violated: :new-vpn must not depend on :new-vpn-daemon-jvm.")
+        if (":wg-kotlin-daemon-jvm" in coreDependencies) {
+            throw GradleException("Architecture rule violated: :wg-kotlin must not depend on :wg-kotlin-daemon-jvm.")
         }
 
         val daemonJvmDependencies = daemonJvmProjectDependencies.get().toSet()
-        if (":new-vpn-daemon-protocol" !in daemonJvmDependencies) {
-            throw GradleException("Architecture rule violated: :new-vpn-daemon-jvm must depend on :new-vpn-daemon-protocol.")
+        if (":wg-kotlin-daemon-protocol" !in daemonJvmDependencies) {
+            throw GradleException("Architecture rule violated: :wg-kotlin-daemon-jvm must depend on :wg-kotlin-daemon-protocol.")
         }
-        val daemonJvmUnexpected = daemonJvmDependencies - setOf(":new-vpn-daemon-protocol")
+        val daemonJvmUnexpected = daemonJvmDependencies - setOf(":wg-kotlin-daemon-protocol", ":wg-kotlin", ":wg-kotlin-daemon-client-jvm")
         if (daemonJvmUnexpected.isNotEmpty()) {
             throw GradleException(
-                "Architecture rule violated: :new-vpn-daemon-jvm has unexpected project dependencies: $daemonJvmUnexpected"
+                "Architecture rule violated: :wg-kotlin-daemon-jvm has unexpected project dependencies: $daemonJvmUnexpected"
             )
         }
 
         val daemonClientDependencies = daemonClientProjectDependencies.get().toSet()
-        if (":new-vpn-daemon-protocol" !in daemonClientDependencies) {
+        if (":wg-kotlin-daemon-protocol" !in daemonClientDependencies) {
             throw GradleException(
-                "Architecture rule violated: :new-vpn-daemon-client-jvm must depend on :new-vpn-daemon-protocol."
+                "Architecture rule violated: :wg-kotlin-daemon-client-jvm must depend on :wg-kotlin-daemon-protocol."
             )
         }
-        val daemonClientUnexpected = daemonClientDependencies - setOf(":new-vpn-daemon-protocol")
+        val daemonClientUnexpected = daemonClientDependencies - setOf(":wg-kotlin-daemon-protocol")
         if (daemonClientUnexpected.isNotEmpty()) {
             throw GradleException(
-                "Architecture rule violated: :new-vpn-daemon-client-jvm has unexpected project dependencies: $daemonClientUnexpected"
+                "Architecture rule violated: :wg-kotlin-daemon-client-jvm has unexpected project dependencies: $daemonClientUnexpected"
             )
         }
     }
@@ -92,51 +92,51 @@ val checkArchitectureBoundaries = tasks.register<ArchitectureBoundaryCheckTask>(
     description = "Enforces phase 01 module dependency boundaries."
 }
 
-val newVpnMainClasspathConfigurations = listOf("jvmCompileClasspath", "jvmRuntimeClasspath")
+val wgKotlinMainClasspathConfigurations = listOf("jvmCompileClasspath", "jvmRuntimeClasspath")
 val jvmMainClasspathConfigurations = listOf("compileClasspath", "runtimeClasspath")
 
 gradle.projectsEvaluated {
     checkArchitectureBoundaries.configure {
         coreProjectDependencies.set(
             providers.provider {
-                collectResolvedProjectDependencies(":new-vpn", newVpnMainClasspathConfigurations)
+                collectResolvedProjectDependencies(":wg-kotlin", wgKotlinMainClasspathConfigurations)
             }
         )
         daemonJvmProjectDependencies.set(
             providers.provider {
-                collectResolvedProjectDependencies(":new-vpn-daemon-jvm", jvmMainClasspathConfigurations)
+                collectResolvedProjectDependencies(":wg-kotlin-daemon-jvm", jvmMainClasspathConfigurations)
             }
         )
         daemonClientProjectDependencies.set(
             providers.provider {
-                collectResolvedProjectDependencies(":new-vpn-daemon-client-jvm", jvmMainClasspathConfigurations)
+                collectResolvedProjectDependencies(":wg-kotlin-daemon-client-jvm", jvmMainClasspathConfigurations)
             }
         )
     }
 }
 
-val ciNewVpnCore = tasks.register("ciNewVpnCore") {
+val ciWgKotlinCore = tasks.register("ciWgKotlinCore") {
     group = "verification"
-    description = "CI entry task for :new-vpn."
-    dependsOn(":new-vpn:check")
+    description = "CI entry task for :wg-kotlin."
+    dependsOn(":wg-kotlin:check")
 }
 
-val ciNewVpnDaemonProtocol = tasks.register("ciNewVpnDaemonProtocol") {
+val ciWgKotlinDaemonProtocol = tasks.register("ciWgKotlinDaemonProtocol") {
     group = "verification"
-    description = "CI entry task for :new-vpn-daemon-protocol."
-    dependsOn(":new-vpn-daemon-protocol:check")
+    description = "CI entry task for :wg-kotlin-daemon-protocol."
+    dependsOn(":wg-kotlin-daemon-protocol:check")
 }
 
-val ciNewVpnDaemonJvm = tasks.register("ciNewVpnDaemonJvm") {
+val ciWgKotlinDaemonJvm = tasks.register("ciWgKotlinDaemonJvm") {
     group = "verification"
-    description = "CI entry task for :new-vpn-daemon-jvm."
-    dependsOn(":new-vpn-daemon-jvm:check")
+    description = "CI entry task for :wg-kotlin-daemon-jvm."
+    dependsOn(":wg-kotlin-daemon-jvm:check")
 }
 
-val ciNewVpnDaemonClientJvm = tasks.register("ciNewVpnDaemonClientJvm") {
+val ciWgKotlinDaemonClientJvm = tasks.register("ciWgKotlinDaemonClientJvm") {
     group = "verification"
-    description = "CI entry task for :new-vpn-daemon-client-jvm."
-    dependsOn(":new-vpn-daemon-client-jvm:check")
+    description = "CI entry task for :wg-kotlin-daemon-client-jvm."
+    dependsOn(":wg-kotlin-daemon-client-jvm:check")
 }
 
 tasks.register("ciPhase01") {
@@ -144,9 +144,9 @@ tasks.register("ciPhase01") {
     description = "Aggregate CI entry task for phase 01 scaffolding."
     dependsOn(
         checkArchitectureBoundaries,
-        ciNewVpnCore,
-        ciNewVpnDaemonProtocol,
-        ciNewVpnDaemonJvm,
-        ciNewVpnDaemonClientJvm
+        ciWgKotlinCore,
+        ciWgKotlinDaemonProtocol,
+        ciWgKotlinDaemonJvm,
+        ciWgKotlinDaemonClientJvm
     )
 }

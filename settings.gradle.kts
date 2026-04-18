@@ -1,4 +1,4 @@
-rootProject.name = "KMP-VPN"
+rootProject.name = "wg-kotlin"
 
 pluginManagement {
     repositories {
@@ -31,7 +31,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-include(":new-vpn")
-include(":new-vpn-daemon-protocol")
-include(":new-vpn-daemon-jvm")
-include(":new-vpn-daemon-client-jvm")
+include(":wg-kotlin")
+include(":wg-kotlin-daemon-protocol")
+include(":wg-kotlin-daemon-jvm")
+include(":wg-kotlin-daemon-client-jvm")

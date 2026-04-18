@@ -1,4 +1,4 @@
-FILE: new-vpn/src/commonMain/kotlin/com/rafambn/kmpvpn/Vpn.kt
+FILE: wg-kotlin/src/commonMain/kotlin/com/rafambn/wgkotlin/Vpn.kt
 
 REVIEWED
 - Public constructor should expose only engine, config, and onEvent - hides interfaceFactory to simplify user API and enforce dependency injection through factory defaults

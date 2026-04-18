@@ -1,15 +1,15 @@
-# KMP VPN
+# WG-Kotlin
 
-Kotlin Multiplatform Library
+Kotlin Multiplatform WireGuard Implementation
 
 Current library targets: JVM/desktop.
 
-## New VPN Rebuild Modules (Phase 01)
+## WG-Kotlin Modules (Phase 01)
 
-- `:new-vpn`: core orchestration API and contract boundaries.
-- `:new-vpn-daemon-protocol`: typed daemon request/response models shared by JVM components.
-- `:new-vpn-daemon-jvm`: privileged daemon executable scaffold.
-- `:new-vpn-daemon-client-jvm`: JVM client scaffold for daemon IPC.
+- `:wg-kotlin`: core orchestration API and contract boundaries.
+- `:wg-kotlin-daemon-protocol`: typed daemon request/response models shared by JVM components.
+- `:wg-kotlin-daemon-jvm`: privileged daemon executable scaffold.
+- `:wg-kotlin-daemon-client-jvm`: JVM client scaffold for daemon IPC.
 
 Architecture checklist: `docs/new-vpn-rebuild/01-architecture-review-checklist.md`  
 CI entry task (phase 01): `./gradlew ciPhase01`
@@ -20,7 +20,7 @@ CI entry task (phase 01): `./gradlew ciPhase01`
 
 ### Publish to MavenLocal
 
-1) Run `./gradlew :kmp-vpn:publishToMavenLocal`
+1) Run `./gradlew :wg-kotlin:publishToMavenLocal`
 2) Open `~/.m2/repository/com/rafambn/`
 
 ### Publish to MavenCentral
@@ -28,7 +28,7 @@ CI entry task (phase 01): `./gradlew ciPhase01`
 1) Create an account and a namespace on Sonatype:  
    https://central.sonatype.org/register/central-portal/#create-an-account
 2) Add developer id, name, email and the project url to  
-   `./kmp-vpn/build.gradle.kts`
+   `./wg-kotlin/build.gradle.kts`
 3) Generate a GPG key:  
    https://getstream.io/blog/publishing-libraries-to-mavencentral-2021/#generating-a-gpg-key-pair
    ```
@@ -44,4 +44,4 @@ CI entry task (phase 01): `./gradlew ciPhase01`
    mavenCentralUsername=[generated username]
    mavenCentralPassword=[generated password]
    ```
-5) Run `./gradlew :kmp-vpn:publishAndReleaseToMavenCentral --no-configuration-cache`
+5) Run `./gradlew :wg-kotlin:publishAndReleaseToMavenCentral --no-configuration-cache`
