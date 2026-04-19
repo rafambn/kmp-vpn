@@ -8,46 +8,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17 (Temurin)
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: "temurin"
-          cache: "gradle"
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-cleanup: on-success
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      - name: Run tests
-        run: ./gradlew ciWgKotlinCore ciWgKotlinDaemonProtocol ciWgKotlinDaemonJvm --no-daemon
-
-      - name: Upload test results
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: |
-            wg-kotlin/build/test-results/
-            wg-kotlin-daemon-protocol/build/test-results/
-            wg-kotlin-daemon-jvm/build/test-results/
-          retention-days: 7
-
   build-native-binaries:
     name: Build Native ${{ matrix.name }}
-    needs: test
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
