@@ -3,11 +3,32 @@ package com.rafambn.wgkotlin.crypto
 sealed class PacketAction {
     data object Done : PacketAction()
 
-    data class WriteToNetwork(val packet: ByteArray) : PacketAction()
+    class WriteToNetwork(val packet: ByteArray) : PacketAction() {
+        override fun equals(other: Any?): Boolean =
+            other is WriteToNetwork && packet.contentEquals(other.packet)
 
-    data class WriteToTunIpv4(val packet: ByteArray) : PacketAction()
+        override fun hashCode(): Int = packet.contentHashCode()
 
-    data class WriteToTunIpv6(val packet: ByteArray) : PacketAction()
+        override fun toString(): String = "WriteToNetwork(packet=${packet.contentToString()})"
+    }
+
+    class WriteToTunIpv4(val packet: ByteArray) : PacketAction() {
+        override fun equals(other: Any?): Boolean =
+            other is WriteToTunIpv4 && packet.contentEquals(other.packet)
+
+        override fun hashCode(): Int = packet.contentHashCode()
+
+        override fun toString(): String = "WriteToTunIpv4(packet=${packet.contentToString()})"
+    }
+
+    class WriteToTunIpv6(val packet: ByteArray) : PacketAction() {
+        override fun equals(other: Any?): Boolean =
+            other is WriteToTunIpv6 && packet.contentEquals(other.packet)
+
+        override fun hashCode(): Int = packet.contentHashCode()
+
+        override fun toString(): String = "WriteToTunIpv6(packet=${packet.contentToString()})"
+    }
 
     data class Error(val code: UInt) : PacketAction()
 

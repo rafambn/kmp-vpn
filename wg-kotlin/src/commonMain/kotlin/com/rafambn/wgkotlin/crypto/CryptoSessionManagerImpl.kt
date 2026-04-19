@@ -70,7 +70,7 @@ internal class CryptoSessionManagerImpl(
                     previous.session.peerIndex == desiredIndex &&
                     previous.session.isActive
                 ) {
-                    nextSessions[publicKey] = checkNotNull(previous)
+                    nextSessions[publicKey] = previous
                     return@forEach
                 }
 
@@ -96,13 +96,6 @@ internal class CryptoSessionManagerImpl(
             throw throwable
         }
 
-        previousSessions.forEach { (publicKey, entry) ->
-            val replacement = nextSessions[publicKey]
-            if (replacement !== entry) {
-                entry.session.close()
-            }
-        }
-
         runBlocking {
             reconcileMutex.withLock {
                 // Remove stats for peers that are no longer present so stale stats
@@ -111,6 +104,13 @@ internal class CryptoSessionManagerImpl(
                     .filter { key -> !nextSessions.containsKey(key) }
                     .forEach { key -> peerStatsByPublicKey.remove(key) }
                 sessionEntriesByPeer = nextSessions.toMap()
+            }
+        }
+
+        previousSessions.forEach { (publicKey, entry) ->
+            val replacement = nextSessions[publicKey]
+            if (replacement !== entry) {
+                entry.session.close()
             }
         }
     }
@@ -143,7 +143,9 @@ internal class CryptoSessionManagerImpl(
     override fun stop() {
         scope?.cancel("CryptoSessionManager stopped")
         scope = null
-        closePeerSessionsOnly()
+        sessionEntriesByPeer.values.forEach { entry -> entry.session.close() }
+        sessionEntriesByPeer = emptyMap()
+        peerStatsByPublicKey.clear()
     }
 
     override fun hasActiveSessions(): Boolean {
@@ -337,12 +339,6 @@ internal class CryptoSessionManagerImpl(
             }
             .maxByOrNull { (_, route) -> route.prefixLength }
             ?.first
-    }
-
-    private fun closePeerSessionsOnly() {
-        sessionEntriesByPeer.values.forEach { entry -> entry.session.close() }
-        sessionEntriesByPeer = emptyMap()
-        peerStatsByPublicKey.clear()
     }
 
     private companion object {
