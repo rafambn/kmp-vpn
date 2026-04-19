@@ -1,0 +1,110 @@
+name: Build and Test
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Run tests
+        run: ./gradlew ciWgKotlinCore ciWgKotlinDaemonProtocol ciWgKotlinDaemonJvm --no-daemon
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            wg-kotlin/build/test-results/
+            wg-kotlin-daemon-protocol/build/test-results/
+            wg-kotlin-daemon-jvm/build/test-results/
+          retention-days: 7
+
+  build-distributions:
+    name: Build ${{ matrix.name }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows x64
+            gradle-command: .\gradlew.bat :wg-kotlin-daemon-jvm:distZip --no-daemon
+            artifact-name: wg-kotlin-daemon-windows-x64
+
+          - os: macos-13
+            name: macOS x64
+            gradle-command: ./gradlew :wg-kotlin-daemon-jvm:distZip --no-daemon
+            artifact-name: wg-kotlin-daemon-macos-x64
+
+          - os: macos-latest
+            name: macOS ARM64
+            gradle-command: ./gradlew :wg-kotlin-daemon-jvm:distZip --no-daemon
+            artifact-name: wg-kotlin-daemon-macos-arm64
+
+          - os: ubuntu-latest
+            name: Linux x64
+            gradle-command: ./gradlew :wg-kotlin-daemon-jvm:distZip --no-daemon
+            artifact-name: wg-kotlin-daemon-linux-x64
+
+          - os: ubuntu-24.04-arm
+            name: Linux ARM64
+            gradle-command: ./gradlew :wg-kotlin-daemon-jvm:distZip --no-daemon
+            artifact-name: wg-kotlin-daemon-linux-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Make gradlew executable
+        if: runner.os != 'Windows'
+        run: chmod +x ./gradlew
+
+      - name: Build distribution
+        run: ${{ matrix.gradle-command }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: wg-kotlin-daemon-jvm/build/distributions/*.zip
+          retention-days: 7
