@@ -48,15 +48,19 @@ fun File.isLocalGraalVm25Home(): Boolean =
         releaseProperties().getProperty("JAVA_VERSION")?.trim('"')?.startsWith("25") == true
 
 fun findLocalGraalVm25Home(userHome: File): File? =
-    sequenceOf(userHome.resolve(".jdks"), userHome.resolve("jdks"))
-        .filter(File::isDirectory)
-        .flatMap { root ->
-            sequenceOf(root) + root.listFiles().orEmpty().asSequence()
-        }
+    sequenceOf("GRAALVM_HOME", "JAVA_HOME")
+        .mapNotNull { System.getenv(it)?.takeIf(String::isNotBlank)?.let(::File) }
         .filter { it.isLocalGraalVm25Home() }
-        .distinctBy(File::getAbsolutePath)
-        .sortedBy(File::getName)
         .firstOrNull()
+        ?: sequenceOf(userHome.resolve(".jdks"), userHome.resolve("jdks"))
+            .filter(File::isDirectory)
+            .flatMap { root ->
+                sequenceOf(root) + root.listFiles().orEmpty().asSequence()
+            }
+            .filter { it.isLocalGraalVm25Home() }
+            .distinctBy(File::getAbsolutePath)
+            .sortedBy(File::getName)
+            .firstOrNull()
 
 fun staticJavaLauncher(javaHome: File): JavaLauncher {
     val releaseProperties = javaHome.releaseProperties()
