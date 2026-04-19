@@ -62,7 +62,12 @@ abstract class ArchitectureBoundaryCheckTask : DefaultTask() {
         if (":wg-kotlin-daemon-protocol" !in daemonJvmDependencies) {
             throw GradleException("Architecture rule violated: :wg-kotlin-daemon-jvm must depend on :wg-kotlin-daemon-protocol.")
         }
-        val daemonJvmUnexpected = daemonJvmDependencies - setOf(":wg-kotlin-daemon-protocol", ":wg-kotlin")
+        val daemonJvmUnexpected = daemonJvmDependencies - setOf(
+            ":wg-kotlin-daemon-protocol",
+            ":wg-kotlin",
+            ":wg-kotlin-uniffi-boringtun",
+            ":wg-kotlin-uniffi-tun-rs"
+        )
         if (daemonJvmUnexpected.isNotEmpty()) {
             throw GradleException(
                 "Architecture rule violated: :wg-kotlin-daemon-jvm has unexpected project dependencies: $daemonJvmUnexpected"

@@ -3,9 +3,9 @@ package com.rafambn.wgkotlin.crypto.factory
 import com.rafambn.wgkotlin.VpnConfiguration
 import com.rafambn.wgkotlin.VpnPeer
 import com.rafambn.wgkotlin.crypto.PacketAction
-import uniffi.wg_kotlin.convertX25519KeyToBase64
-import uniffi.wg_kotlin.generatePublicKey
-import uniffi.wg_kotlin.generateSecretKey
+import uniffi.wg_kotlin_uniffi_boringtun.convertX25519KeyToBase64
+import uniffi.wg_kotlin_uniffi_boringtun.generatePublicKey
+import uniffi.wg_kotlin_uniffi_boringtun.generateSecretKey
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse

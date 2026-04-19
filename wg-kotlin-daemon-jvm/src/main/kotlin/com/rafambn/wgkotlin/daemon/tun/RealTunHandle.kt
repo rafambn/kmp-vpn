@@ -2,7 +2,7 @@ package com.rafambn.wgkotlin.daemon.tun
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import uniffi.wg_kotlin.TunDevice
+import uniffi.wg_kotlin_uniffi_tun_rs.TunDevice
 
 /**
  * Real TUN device handle implementation using tun-rs via Rust FFI.

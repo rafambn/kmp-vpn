@@ -1,17 +1,15 @@
 package com.rafambn.wgkotlin.crypto
 
 import com.rafambn.wgkotlin.VpnConfiguration
-import com.rafambn.wgkotlin.network.io.UdpDatagram
-import com.rafambn.wgkotlin.util.DuplexChannelPipe
 
 /**
  * Owns peer crypto sessions and the three data-plane worker coroutines.
  *
- * Cleartext ingress: reads raw IP packets from [tunPipe], encrypts per peer,
- * forwards to [networkPipe].
+ * Cleartext ingress: reads raw IP packets from configured TUN pipe,
+ * encrypts per peer, forwards to configured network pipe.
  *
- * Encrypted ingress: reads [UdpDatagram] from [networkPipe], decrypts per peer,
- * forwards to [tunPipe].
+ * Encrypted ingress: reads encrypted datagrams from configured network pipe,
+ * decrypts per peer, forwards to configured TUN pipe.
  *
  * Periodic: runs keepalive and rekey tasks for every active session.
  */
@@ -25,15 +23,11 @@ interface CryptoSessionManager {
     fun reconcileSessions(config: VpnConfiguration)
 
     /**
-     * Starts the three worker coroutines bridging [tunPipe] and [networkPipe].
+     * Starts the three worker coroutines using configured pipes.
      * Stops any previously running workers first.
      * [onFailure] is invoked on any unrecoverable worker error.
      */
-    fun start(
-        tunPipe: DuplexChannelPipe<ByteArray>,
-        networkPipe: DuplexChannelPipe<UdpDatagram>,
-        onFailure: (Throwable) -> Unit,
-    )
+    fun start(onFailure: (Throwable) -> Unit)
 
     /**
      * Cancels all worker coroutines and closes every peer session.

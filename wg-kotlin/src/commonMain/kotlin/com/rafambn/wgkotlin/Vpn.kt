@@ -19,7 +19,11 @@ class Vpn(
     private val tunPipePair = DuplexChannelPipe.create<ByteArray>()
     private val networkPipePair = DuplexChannelPipe.create<UdpDatagram>()
     private var vpnConfiguration = configuration
-    private val cryptoSessionManager = CryptoSessionManagerImpl(engine = engine)
+    private val cryptoSessionManager = CryptoSessionManagerImpl(
+        tunPipe = tunPipePair.second,
+        networkPipe = networkPipePair.second,
+        engine = engine,
+    )
     private val socketManager = SocketManagerImpl(networkPipe = networkPipePair.first)
     private val interfaceManager = PlatformInterfaceFactory.create(tunPipePair.first)
 
@@ -40,7 +44,7 @@ class Vpn(
         }
 
         operation("start") {
-            cryptoSessionManager.start(tunPipePair.second, networkPipePair.second) { close() }
+            cryptoSessionManager.start { close() }
         }
 
         operation("socketStart") {

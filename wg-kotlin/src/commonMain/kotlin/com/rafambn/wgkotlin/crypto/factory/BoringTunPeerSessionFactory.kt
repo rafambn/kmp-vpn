@@ -4,7 +4,7 @@ import com.rafambn.wgkotlin.VpnConfiguration
 import com.rafambn.wgkotlin.VpnPeer
 import com.rafambn.wgkotlin.crypto.BoringTunPeerSession
 import com.rafambn.wgkotlin.crypto.PeerSession
-import uniffi.wg_kotlin.TunnelSession
+import uniffi.wg_kotlin_uniffi_boringtun.TunnelSession
 
 class BoringTunPeerSessionFactory : PeerSessionFactory {
     override fun create(

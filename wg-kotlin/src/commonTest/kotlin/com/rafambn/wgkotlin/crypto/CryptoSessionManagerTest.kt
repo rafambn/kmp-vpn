@@ -21,7 +21,7 @@ class CryptoSessionManagerTest {
     @Test
     fun reconcileSessionsCreatesActiveSessionsForAllPeers() {
         val factory = RecordingSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val manager = createManager(factory)
 
         manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
 
@@ -33,7 +33,7 @@ class CryptoSessionManagerTest {
     @Test
     fun reconcileSessionsRemovesMissingPeers() {
         val factory = RecordingSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val manager = createManager(factory)
 
         manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
         manager.reconcileSessions(configurationWithPeers("peer-b"))
@@ -46,7 +46,7 @@ class CryptoSessionManagerTest {
     @Test
     fun reconcileSessionsReplacesChangedPeerConfiguration() {
         val factory = RecordingSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val manager = createManager(factory)
 
         manager.reconcileSessions(
             configurationWithPeer(
@@ -80,7 +80,7 @@ class CryptoSessionManagerTest {
 
     @Test
     fun duplicatePeerKeysAreRejected() {
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = RecordingSessionFactory())
+        val manager = createManager(RecordingSessionFactory())
 
         val duplicated = configurationWithPeer(
             VpnPeer(publicKey = "peer-a"),
@@ -95,7 +95,7 @@ class CryptoSessionManagerTest {
     @Test
     fun partialCreateFailureRollsBackNewlyCreatedSessions() {
         val factory = RecordingSessionFactory(failOnPeer = "peer-b")
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val manager = createManager(factory)
 
         val throwable = assertFailsWith<IllegalStateException> {
             manager.reconcileSessions(configurationWithPeers("peer-a", "peer-b"))
@@ -110,7 +110,7 @@ class CryptoSessionManagerTest {
     @Test
     fun peerIndexesAreDeterministicAcrossPeerOrderChanges() {
         val factory = RecordingSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val manager = createManager(factory)
 
         manager.reconcileSessions(configurationWithPeers("peer-b", "peer-a"))
         val first = factory.createdSessions
@@ -130,7 +130,7 @@ class CryptoSessionManagerTest {
     @Test
     fun stopClearsActiveSessions() {
         val factory = RecordingSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val manager = createManager(factory)
 
         manager.reconcileSessions(configurationWithPeers("peer-a"))
         assertTrue(manager.hasActiveSessions())
@@ -160,6 +160,16 @@ class CryptoSessionManagerTest {
             interfaceName = "wg-test",
             privateKey = "private-key",
             peers = peers.toList(),
+        )
+    }
+
+    private fun createManager(peerSessionFactory: PeerSessionFactory): CryptoSessionManagerImpl {
+        val (_, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
+        val (_, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
+        return CryptoSessionManagerImpl(
+            tunPipe = cryptoTun,
+            networkPipe = cryptoNet,
+            peerSessionFactory = peerSessionFactory,
         )
     }
 
@@ -195,7 +205,13 @@ class CryptoSessionManagerTest {
     @Test
     fun cleartextIngressEncryptsAndForwardsToNetwork() = runBlocking {
         val factory = DataPlaneSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val (testTun, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
+        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
+        val manager = CryptoSessionManagerImpl(
+            tunPipe = cryptoTun,
+            networkPipe = cryptoNet,
+            peerSessionFactory = factory,
+        )
         manager.reconcileSessions(
             configurationWithPeer(
                 VpnPeer(
@@ -207,9 +223,7 @@ class CryptoSessionManagerTest {
             ),
         )
 
-        val (testTun, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
-        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
-        manager.start(cryptoTun, cryptoNet, onFailure = { throw it })
+        manager.start(onFailure = { throw it })
 
         testTun.send(fakeIpv4Packet())
 
@@ -224,7 +238,13 @@ class CryptoSessionManagerTest {
     @Test
     fun encryptedIngressDecryptsAndForwardsToTun() = runBlocking {
         val factory = DataPlaneSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val (testTun, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
+        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
+        val manager = CryptoSessionManagerImpl(
+            tunPipe = cryptoTun,
+            networkPipe = cryptoNet,
+            peerSessionFactory = factory,
+        )
         manager.reconcileSessions(
             configurationWithPeer(
                 VpnPeer(
@@ -236,9 +256,7 @@ class CryptoSessionManagerTest {
             ),
         )
 
-        val (testTun, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
-        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
-        manager.start(cryptoTun, cryptoNet, onFailure = { throw it })
+        manager.start(onFailure = { throw it })
 
         val encryptedPayload = byteArrayOf(0x01, 0x02, 0x03)
         testNet.send(
@@ -257,7 +275,13 @@ class CryptoSessionManagerTest {
     @Test
     fun inboundStatsAccountForReceivedBytes() = runBlocking {
         val factory = DataPlaneSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val (_, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
+        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
+        val manager = CryptoSessionManagerImpl(
+            tunPipe = cryptoTun,
+            networkPipe = cryptoNet,
+            peerSessionFactory = factory,
+        )
         manager.reconcileSessions(
             configurationWithPeer(
                 VpnPeer(
@@ -269,9 +293,7 @@ class CryptoSessionManagerTest {
             ),
         )
 
-        val (_, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
-        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
-        manager.start(cryptoTun, cryptoNet, onFailure = { throw it })
+        manager.start(onFailure = { throw it })
 
         val payload = byteArrayOf(0xAA.toByte(), 0xBB.toByte(), 0xCC.toByte())
         testNet.send(UdpDatagram(payload = payload, remoteEndpoint = UdpEndpoint("198.51.100.1", 51820)))
@@ -292,7 +314,13 @@ class CryptoSessionManagerTest {
     @Test
     fun periodicTaskSendsKeepaliveToNetwork() = runBlocking {
         val factory = DataPlaneSessionFactory()
-        val manager = CryptoSessionManagerImpl(peerSessionFactory = factory)
+        val (_, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
+        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
+        val manager = CryptoSessionManagerImpl(
+            tunPipe = cryptoTun,
+            networkPipe = cryptoNet,
+            peerSessionFactory = factory,
+        )
         manager.reconcileSessions(
             configurationWithPeer(
                 VpnPeer(
@@ -304,9 +332,7 @@ class CryptoSessionManagerTest {
             ),
         )
 
-        val (_, cryptoTun) = DuplexChannelPipe.create<ByteArray>()
-        val (testNet, cryptoNet) = DuplexChannelPipe.create<UdpDatagram>()
-        manager.start(cryptoTun, cryptoNet, onFailure = { throw it })
+        manager.start(onFailure = { throw it })
 
         // Periodic interval is 100 ms; wait up to 2 s for the first keepalive.
         val keepalive = withTimeout(2_000) { testNet.receive() }

@@ -26,6 +26,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 internal class CryptoSessionManagerImpl(
+    private val tunPipe: DuplexChannelPipe<ByteArray>,
+    private val networkPipe: DuplexChannelPipe<UdpDatagram>,
     engine: Engine = Engine.BORINGTUN,
     private val peerSessionFactory: PeerSessionFactory = defaultFactory(engine),
 ) : CryptoSessionManager {
@@ -107,11 +109,7 @@ internal class CryptoSessionManagerImpl(
         }
     }
 
-    override fun start(
-        tunPipe: DuplexChannelPipe<ByteArray>,
-        networkPipe: DuplexChannelPipe<UdpDatagram>,
-        onFailure: (Throwable) -> Unit,
-    ) {
+    override fun start(onFailure: (Throwable) -> Unit) {
         scope?.cancel("CryptoSessionManager restarted")
         peerStatsByPublicKey.clear()
 
@@ -122,13 +120,13 @@ internal class CryptoSessionManagerImpl(
         scope = newScope
 
         newScope.launch(CoroutineName("$coroutineLabel-cleartext-ingress")) {
-            runCleartextIngressLoop(tunPipe, networkPipe, onFailure)
+            runCleartextIngressLoop(onFailure)
         }
         newScope.launch(CoroutineName("$coroutineLabel-encrypted-ingress")) {
-            runEncryptedIngressLoop(tunPipe, networkPipe, onFailure)
+            runEncryptedIngressLoop(onFailure)
         }
         newScope.launch(CoroutineName("$coroutineLabel-periodic")) {
-            runPeriodicLoop(networkPipe, onFailure)
+            runPeriodicLoop(onFailure)
         }
     }
 
@@ -159,11 +157,7 @@ internal class CryptoSessionManagerImpl(
         }
     }
 
-    private suspend fun runCleartextIngressLoop(
-        tunPipe: DuplexChannelPipe<ByteArray>,
-        networkPipe: DuplexChannelPipe<UdpDatagram>,
-        onFailure: (Throwable) -> Unit,
-    ) {
+    private suspend fun runCleartextIngressLoop(onFailure: (Throwable) -> Unit) {
         try {
             while (true) {
                 val packet = tunPipe.receive()
@@ -205,11 +199,7 @@ internal class CryptoSessionManagerImpl(
         }
     }
 
-    private suspend fun runEncryptedIngressLoop(
-        tunPipe: DuplexChannelPipe<ByteArray>,
-        networkPipe: DuplexChannelPipe<UdpDatagram>,
-        onFailure: (Throwable) -> Unit,
-    ) {
+    private suspend fun runEncryptedIngressLoop(onFailure: (Throwable) -> Unit) {
         try {
             while (true) {
                 val datagram = networkPipe.receive()
@@ -272,10 +262,7 @@ internal class CryptoSessionManagerImpl(
         }
     }
 
-    private suspend fun runPeriodicLoop(
-        networkPipe: DuplexChannelPipe<UdpDatagram>,
-        onFailure: (Throwable) -> Unit,
-    ) {
+    private suspend fun runPeriodicLoop(onFailure: (Throwable) -> Unit) {
         try {
             while (true) {
                 delay(DEFAULT_PERIODIC_INTERVAL_MILLIS)

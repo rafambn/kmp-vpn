@@ -16,6 +16,7 @@ application {
 dependencies {
     implementation(project(":wg-kotlin-daemon-protocol"))
     implementation(project(":wg-kotlin"))
+    implementation(project(":wg-kotlin-uniffi-tun-rs"))
     implementation(libs.clikt)
     implementation(libs.commons.exec)
     implementation(libs.kotlinx.rpc.krpc.server)

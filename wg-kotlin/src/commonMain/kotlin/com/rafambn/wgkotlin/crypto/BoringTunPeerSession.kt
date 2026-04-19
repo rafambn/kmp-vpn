@@ -1,7 +1,7 @@
 package com.rafambn.wgkotlin.crypto
 
-import uniffi.wg_kotlin.TunnelPacketResult
-import uniffi.wg_kotlin.TunnelSession
+import uniffi.wg_kotlin_uniffi_boringtun.TunnelPacketResult
+import uniffi.wg_kotlin_uniffi_boringtun.TunnelSession
 
 class BoringTunPeerSession(
     override val peerPublicKey: String,
