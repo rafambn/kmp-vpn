@@ -10,6 +10,8 @@ import com.rafambn.wgkotlin.session.io.UdpDatagram
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class VpnStateTransitionTest {
 
@@ -20,13 +22,13 @@ class VpnStateTransitionTest {
     fun lifecycleTransitionsFollowContract() {
         val vpn = testVpn(configuration = baseConfiguration(interfaceName = "utun130"))
 
-        assertEquals(VpnState.Stopped, vpn.state())
+        assertFalse(vpn.isRunning())
 
-        vpn.start()
-        assertEquals(VpnState.Running, vpn.state())
+        vpn.open()
+        assertTrue(vpn.isRunning())
 
-        vpn.stop()
-        assertEquals(VpnState.Stopped, vpn.state())
+        vpn.close()
+        assertFalse(vpn.isRunning())
     }
 
     @Test
@@ -37,10 +39,10 @@ class VpnStateTransitionTest {
         )
 
         assertFailsWith<IllegalStateException> {
-            vpn.start()
+            vpn.open()
         }
 
-        assertEquals(VpnState.Stopped, vpn.state())
+        assertFalse(vpn.isRunning())
     }
 
     @Test
@@ -56,7 +58,7 @@ class VpnStateTransitionTest {
         )
 
         assertFailsWith<IllegalStateException> {
-            vpn.stop()
+            vpn.close()
         }
 
         assertEquals(1, socketManager.stopCalls)

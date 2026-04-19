@@ -2,7 +2,9 @@ package com.rafambn.wgkotlin
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class VpnFoundationWiringTest {
 
@@ -20,13 +22,13 @@ class VpnFoundationWiringTest {
             ),
         )
 
-        assertEquals(VpnState.Stopped, vpn.state())
+        assertFalse(vpn.isRunning())
 
-        vpn.start()
-        assertEquals(VpnState.Running, vpn.state())
+        vpn.open()
+        assertTrue(vpn.isRunning())
 
-        vpn.stop()
-        assertEquals(VpnState.Stopped, vpn.state())
+        vpn.close()
+        assertFalse(vpn.isRunning())
         assertNull(vpn.information())
     }
 
@@ -40,10 +42,10 @@ class VpnFoundationWiringTest {
             ),
         )
 
-        vpn.start()
-        vpn.start()
+        vpn.open()
+        vpn.open()
 
-        assertEquals(VpnState.Running, vpn.state())
+        assertTrue(vpn.isRunning())
     }
 
     @Test
@@ -57,7 +59,7 @@ class VpnFoundationWiringTest {
             ),
         )
 
-        vpn.start()
+        vpn.open()
 
         vpn.reconfigure(
             VpnConfiguration(

@@ -1,8 +1,9 @@
 package com.rafambn.wgkotlin
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
+import kotlin.test.assertTrue
 
 class VpnConstructorWiringTest {
 
@@ -15,13 +16,13 @@ class VpnConstructorWiringTest {
         val second = Vpn(configuration(interfaceName = "utun102"))
 
         assertNotSame(first, second)
-        assertEquals(VpnState.Stopped, first.state())
-        assertEquals(VpnState.Stopped, second.state())
+        assertFalse(first.isRunning())
+        assertFalse(second.isRunning())
 
-        first.start()
+        first.open()
 
-        assertEquals(VpnState.Running, first.state())
-        assertEquals(VpnState.Stopped, second.state())
+        assertTrue(first.isRunning())
+        assertFalse(second.isRunning())
     }
 
     @Test
@@ -31,11 +32,11 @@ class VpnConstructorWiringTest {
             engine = Engine.BORINGTUN,
         )
 
-        vpn.start()
-        assertEquals(VpnState.Running, vpn.state())
+        vpn.open()
+        assertTrue(vpn.isRunning())
 
-        vpn.stop()
-        assertEquals(VpnState.Stopped, vpn.state())
+        vpn.close()
+        assertFalse(vpn.isRunning())
     }
 
     private fun configuration(interfaceName: String): VpnConfiguration {
